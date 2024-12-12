@@ -1,0 +1,24 @@
+[database]
+user = "your_username"
+password = "your_password"
+dbname = "your_dbname"
+host = "localhost"
+port = 3306
+
+[redis]
+host = "localhost"
+port = 6379
+password = "your_redis_password"
+
+[geetest]
+captchaURL = "http://gcaptcha4.geetest.com"
+captcha_id = "your_captcha_id"
+captcha_key = "your_captcha_key"
+
+[smtp]
+host = "smtp.example.com"
+port = 587
+UseTLS = true
+user = "your-email@example.com"
+sender = "your-email@example.com"
+password = "your-email-password"
