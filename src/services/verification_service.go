@@ -65,12 +65,20 @@ func SendVerificationCode(email string, code string) error {
 // 创建阿里云短信客户端
 func CreateClient() (*dysmsapi20170525.Client, error) {
 	config := &openapi.Config{
-		AccessKeyId:     tea.String(config.SMTP.User),     // 从配置中读取 AccessKey
-		AccessKeySecret: tea.String(config.SMTP.Password), // 从配置中读取 AccessSecret
+		AccessKeyId:     tea.String(config.Aliyun.AccessKeyId),
+		AccessKeySecret: tea.String(config.Aliyun.AccessKeySecret),
 		Endpoint:        tea.String("dysmsapi.aliyuncs.com"),
 	}
 	client, err := dysmsapi20170525.NewClient(config)
-	return client, err
+	if err != nil {
+		return nil, fmt.Errorf("创建短信客户端失败: %v", err)
+	}
+
+	if client.Credential == nil {
+		return nil, fmt.Errorf("短信初始化失败，请检查 config.toml 文件")
+	}
+
+	return client, nil
 }
 
 // 发送验证码到手机号
@@ -82,9 +90,9 @@ func SendVerificationCodeToPhone(phone string, code string) error {
 
 	sendSmsRequest := &dysmsapi20170525.SendSmsRequest{
 		PhoneNumbers:  tea.String(phone),
-		SignName:      tea.String("你的短信签名"),                           // 替换为你的短信签名
-		TemplateCode:  tea.String("你的模板编号"),                           // 替换为你的短信模板编号
-		TemplateParam: tea.String(fmt.Sprintf(`{"code":"%s"}`, code)), // 发送的验证码
+		SignName:      tea.String(config.Aliyun.SignName),
+		TemplateCode:  tea.String(config.Aliyun.TemplateCode),
+		TemplateParam: tea.String(fmt.Sprintf(`{"code":"%s"}`, code)),
 	}
 
 	runtime := &util.RuntimeOptions{}

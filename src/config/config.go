@@ -16,6 +16,7 @@ type Config struct {
 	Database DatabaseConfig
 	SMTP     SMTPConfig
 	Redis    RedisConfig
+	Aliyun   AliyunConfig
 	Geetest  GeetestConfig
 }
 
@@ -42,6 +43,13 @@ type RedisConfig struct {
 	Password string
 }
 
+type AliyunConfig struct {
+	AccessKeyId     string
+	AccessKeySecret string
+	SignName        string
+	TemplateCode    string
+}
+
 type GeetestConfig struct {
 	CaptchaURL string
 	CaptchaID  string
@@ -50,6 +58,7 @@ type GeetestConfig struct {
 
 var DB *gorm.DB
 var SMTP SMTPConfig
+var Aliyun AliyunConfig
 var Geetest GeetestConfig
 var RedisClient *redis.Client
 var logger = logrus.New()
@@ -117,5 +126,6 @@ func InitConfig() {
 	}
 
 	SMTP = config.SMTP
+	Aliyun = config.Aliyun
 	Geetest = config.Geetest
 }

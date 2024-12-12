@@ -10,6 +10,12 @@ host = "localhost"
 port = 6379
 password = "your_redis_password"
 
+[aliyun]
+accessKeyId = "your-access-key-id"
+accessKeySecret = "your-access-key-secret"
+signName = "your-sign-name"
+templateCode = "your-template-code"
+
 [geetest]
 captchaURL = "http://gcaptcha4.geetest.com"
 captcha_id = "your_captcha_id"
