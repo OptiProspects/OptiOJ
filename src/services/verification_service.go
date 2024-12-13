@@ -31,6 +31,7 @@ func SendVerificationCode(email string, code string) error {
 	sender := config.SMTP.Sender
 	password := config.SMTP.Password
 	useTLS := config.SMTP.UseTLS
+	useSSL := config.SMTP.UseSSL
 
 	m := mail.NewMsg()
 	if err := m.From(sender); err != nil {
@@ -42,16 +43,21 @@ func SendVerificationCode(email string, code string) error {
 	m.Subject("验证码")
 	m.SetBodyString("text/plain", "您的验证码是: "+code)
 
-	c, err := mail.NewClient(smtpHost, mail.WithTLSPortPolicy(mail.TLSMandatory), mail.WithUsername(user), mail.WithPassword(password), mail.WithPort(smtpPort))
-	if err != nil {
-		return errors.New("创建邮件客户端失败: " + err.Error())
+	var clientOptions []mail.Option
+	clientOptions = append(clientOptions, mail.WithSMTPAuth(mail.SMTPAuthPlain), mail.WithUsername(user), mail.WithPassword(password), mail.WithPort(smtpPort))
+
+	// 如果同时启用 TLS 和 SSL，则优先使用 SSL
+	if useSSL {
+		clientOptions = append(clientOptions, mail.WithSSL())
+	} else if useTLS {
+		clientOptions = append(clientOptions, mail.WithTLSPolicy(mail.TLSMandatory))
+	} else {
+		clientOptions = append(clientOptions, mail.WithTLSPolicy(mail.NoTLS))
 	}
 
-	// 设置 TLS 选项
-	if useTLS {
-		c.SetSSLPort(true, true) // 启用 SSL/TLS
-	} else {
-		c.SetSSLPort(false, false) // 禁用 SSL/TLS
+	c, err := mail.NewClient(smtpHost, clientOptions...)
+	if err != nil {
+		return errors.New("创建邮件客户端失败: " + err.Error())
 	}
 
 	// 发送邮件

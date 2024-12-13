@@ -24,7 +24,9 @@ captcha_key = "your_captcha_key"
 [smtp]
 host = "smtp.example.com"
 port = 587
-UseTLS = true
+# 如果同时启用 TLS 和 SSL，则优先使用 SSL
+UseTLS = false # 是否启用 TLS（对于 STARTTLS 设置为 true，对于普通 SMTP 设置为 false）
+UseSSL = false # 是否启用 SSL（对于 SMTPS 设置为 true，对于普通 SMTP 设置为 false）
 user = "your-email@example.com"
 sender = "your-email@example.com"
 password = "your-email-password"

@@ -35,6 +35,7 @@ type SMTPConfig struct {
 	Password string
 	Sender   string
 	UseTLS   bool
+	UseSSL   bool
 }
 
 type RedisConfig struct {
