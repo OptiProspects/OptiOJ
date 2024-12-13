@@ -6,19 +6,11 @@ import (
 	"OptiOJ/src/services"
 
 	"net/http"
+	"time"
 	"unicode"
 
 	"github.com/gin-gonic/gin"
 )
-
-type RegisterRequest struct {
-	UserName         string `json:"userName"`
-	PassWord         string `json:"passWord"`
-	RequestEmail     string `json:"requestEmail"`
-	RequestPhone     string `json:"requestPhone"`
-	VerificationCode string `json:"verificationCode"`
-	VerificationType string `json:"verificationType"` // "email" 或 "phone"
-}
 
 // 密码强度验证
 func validatePassword(password string) bool {
@@ -60,7 +52,7 @@ func validatePassword(password string) bool {
 }
 
 func RegisterUser(c *gin.Context) {
-	var req RegisterRequest
+	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 		return
@@ -116,13 +108,119 @@ func RegisterUser(c *gin.Context) {
 	}
 
 	// 注册用户
-	if err := services.RegisterUser(user); err != nil {
+	userID, err := services.RegisterUser(user)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 生成访问令牌和刷新令牌
+	accessToken, refreshToken, err := services.GenerateTokenPair(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成令牌失败"})
+		return
+	}
+
+	// 存储令牌信息到 Redis
+	accessSessionKey := "access_token:" + accessToken
+	refreshSessionKey := "refresh_token:" + refreshToken
+
+	// 访问令牌有效期2小时
+	if err := config.RedisClient.Set(c, accessSessionKey, userID, 2*time.Hour).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储访问令牌失败"})
+		return
+	}
+
+	// 刷新令牌有效期30天
+	if err := config.RedisClient.Set(c, refreshSessionKey, userID, 30*24*time.Hour).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储刷新令牌失败"})
 		return
 	}
 
 	// 注册成功后删除验证码
 	config.RedisClient.Del(c, redisKey)
 
-	c.JSON(http.StatusOK, gin.H{"message": "用户注册成功"})
+	c.JSON(http.StatusOK, gin.H{
+		"message":       "用户注册成功",
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
+}
+
+func LoginUser(c *gin.Context) {
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
+		return
+	}
+
+	// 验证用户名和密码
+	user, err := services.ValidateLogin(req.AccountInfo, req.PassWord)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 生成访问令牌和刷新令牌
+	accessToken, refreshToken, err := services.GenerateTokenPair(uint(user.ID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成令牌失败"})
+		return
+	}
+
+	// 存储令牌信息到 Redis
+	accessSessionKey := "access_token:" + accessToken
+	refreshSessionKey := "refresh_token:" + refreshToken
+
+	// 访问令牌有效期2小时
+	if err := config.RedisClient.Set(c, accessSessionKey, user.ID, 2*time.Hour).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储访问令牌失败"})
+		return
+	}
+
+	// 刷新令牌有效期30天
+	if err := config.RedisClient.Set(c, refreshSessionKey, user.ID, 30*24*time.Hour).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储刷新令牌失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "登录成功",
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"phone":    user.Phone,
+		},
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	})
+}
+
+func GetGlobalData(c *gin.Context) {
+	// 从请求头获取访问令牌
+	accessToken := c.GetHeader("Authorization")
+
+	// 验证访问令牌并获取用户ID
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	// 查询用户信息
+	var user models.User
+	if err := config.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"user": gin.H{
+			"id":       user.ID,
+			"username": user.Username,
+			"email":    user.Email,
+			"phone":    user.Phone,
+		},
+	})
 }

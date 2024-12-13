@@ -2,6 +2,8 @@ package config
 
 import (
 	"context"
+	"crypto/rand"
+	"os"
 	"strconv"
 	"time"
 
@@ -64,6 +66,7 @@ var Geetest GeetestConfig
 var RedisClient *redis.Client
 var logger = logrus.New()
 var ctx = context.Background()
+var JWTSecret []byte
 
 func InitDB() {
 	var config Config
@@ -129,4 +132,34 @@ func InitConfig() {
 	SMTP = config.SMTP
 	Aliyun = config.Aliyun
 	Geetest = config.Geetest
+
+	// 初始化 JWT 密钥
+	InitJWTSecret()
+}
+
+func InitJWTSecret() {
+	keyFile := "jwtKey"
+
+	// 尝试读取现有的 key 文件
+	content, err := os.ReadFile(keyFile)
+	if err == nil && len(content) > 0 {
+		// 如果文件存在且不为空，使用现有密钥
+		JWTSecret = content
+		logger.Info("JWT密钥加载成功")
+		return
+	}
+
+	// 如果文件不存在或为空，生成新的密钥
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		logger.Fatal("生成JWT密钥失败:", err)
+	}
+
+	// 将密钥写入文件
+	if err := os.WriteFile(keyFile, secret, 0600); err != nil {
+		logger.Fatal("写入密钥文件失败:", err)
+	}
+
+	JWTSecret = secret
+	logger.Info("已生成新的JWT密钥并保存到key文件")
 }
