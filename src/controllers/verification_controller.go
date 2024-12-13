@@ -38,6 +38,12 @@ func RequestVerification(c *gin.Context) {
 	// 检查用户是否存在
 	userExists := services.CheckUserExist(req.RequestValue, req.RequestType)
 
+	// 如果用户已存在且前端标记不允许用户存在的情况，则返回错误
+	if userExists && !req.UserExist {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "该邮箱或手机号已被注册", "userExist": true})
+		return
+	}
+
 	var code string
 	code = services.GenerateVerificationCode()
 

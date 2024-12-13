@@ -7,7 +7,7 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
-	r.POST("/register", controllers.RegisterUser)
+	r.POST("/auth/userRegister", controllers.RegisterUser)
 	r.POST("/verification/sendVerificationCode", controllers.RequestVerification)
 	r.POST("/verification/validateCaptcha", controllers.ValidateGeetest)
 }
