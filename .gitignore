@@ -29,3 +29,6 @@ config.toml
 
 # jwt key
 jwtKey
+
+# data folder
+data/

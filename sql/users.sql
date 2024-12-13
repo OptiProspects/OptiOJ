@@ -5,3 +5,13 @@ CREATE TABLE users (
     phone VARCHAR(15) UNIQUE,
     email VARCHAR(100) UNIQUE
 );
+
+CREATE TABLE avatars (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id BIGINT UNSIGNED NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    upload_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);

@@ -215,12 +215,20 @@ func GetGlobalData(c *gin.Context) {
 		return
 	}
 
+	// 获取头像信息
+	avatar, _ := services.GetAvatarByUserID(userID)
+	var avatarFilename string
+	if avatar != nil {
+		avatarFilename = avatar.Filename
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
 			"id":       user.ID,
 			"username": user.Username,
 			"email":    user.Email,
 			"phone":    user.Phone,
+			"avatar":   avatarFilename,
 		},
 	})
 }
