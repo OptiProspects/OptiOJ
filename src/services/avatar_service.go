@@ -96,3 +96,24 @@ func GetAvatarByUserID(userID uint) (*models.Avatar, error) {
 	}
 	return &avatar, nil
 }
+
+func RemoveAvatar(userID uint) error {
+	var avatar models.Avatar
+	// 查找用户的头像记录
+	if err := config.DB.Where("user_id = ?", userID).First(&avatar).Error; err != nil {
+		return fmt.Errorf("未找到头像记录")
+	}
+
+	// 删除文件
+	filePath := filepath.Join(GetAvatarPath(), avatar.Filename)
+	if err := os.Remove(filePath); err != nil {
+		return fmt.Errorf("删除头像文件失败: %v", err)
+	}
+
+	// 删除数据库记录
+	if err := config.DB.Delete(&avatar).Error; err != nil {
+		return fmt.Errorf("删除头像记录失败: %v", err)
+	}
+
+	return nil
+}

@@ -222,6 +222,9 @@ func GetGlobalData(c *gin.Context) {
 		avatarFilename = avatar.Filename
 	}
 
+	// 获取用户资料
+	profile, _ := services.GetProfile(userID)
+
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
 			"id":       user.ID,
@@ -229,6 +232,7 @@ func GetGlobalData(c *gin.Context) {
 			"email":    user.Email,
 			"phone":    user.Phone,
 			"avatar":   avatarFilename,
+			"profile":  profile,
 		},
 	})
 }

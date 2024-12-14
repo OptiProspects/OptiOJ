@@ -63,3 +63,25 @@ func GetAvatar(c *gin.Context) {
 	// 返回文件
 	c.File(filePath)
 }
+
+func RemoveAvatar(c *gin.Context) {
+	// 从请求头获取访问令牌
+	accessToken := c.GetHeader("Authorization")
+
+	// 验证访问令牌并获取用户ID
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	// 删除头像
+	if err := services.RemoveAvatar(userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "头像已删除",
+	})
+}

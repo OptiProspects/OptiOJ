@@ -58,6 +58,13 @@ func RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// 存储新的访问令牌信息到 Redis
+	accessSessionKey := "access_token:" + newAccessToken
+	if err := config.RedisClient.Set(c, accessSessionKey, userID, 2*time.Hour).Err(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储访问令牌失败"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"access_token": newAccessToken,
 	})
