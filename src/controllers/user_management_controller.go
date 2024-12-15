@@ -152,3 +152,39 @@ func UnbanUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "用户已解封"})
 }
+
+// GenerateUsers 批量生成用户
+func GenerateUsers(c *gin.Context) {
+	// 验证管理员权限
+	accessToken := c.GetHeader("Authorization")
+	currentUserID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	isAdmin, _ := services.IsAdmin(currentUserID)
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+		return
+	}
+
+	var req models.GenerateUsersRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	// 调用服务生成用户
+	response, err := services.GenerateUsers(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"data":    response,
+		"message": "批量生成用户成功",
+	})
+}

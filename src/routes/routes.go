@@ -28,4 +28,6 @@ func SetupRoutes(r *gin.Engine) {
 	r.PUT("/admin/users/:id", controllers.UpdateUser)
 	r.POST("/admin/users/:id/ban", controllers.BanUser)
 	r.POST("/admin/users/:id/unban", controllers.UnbanUser)
+
+	r.POST("/admin/users/generate", controllers.GenerateUsers)
 }

@@ -3,13 +3,11 @@ package models
 import "time"
 
 type User struct {
-	ID        int       `json:"id"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	Phone     string    `json:"phone"`
-	Email     string    `json:"email"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID       int    `json:"id"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
 }
 
 type RegisterRequest struct {
@@ -63,4 +61,25 @@ type UserListItem struct {
 	LastLoginTime time.Time `json:"last_login_time" gorm:"column:last_login_time"`
 	LastLoginIP   string    `json:"last_login_ip" gorm:"column:last_login_ip"`
 	Role          string    `json:"role"`
+}
+
+// GenerateUsersRequest 批量生成用户请求
+type GenerateUsersRequest struct {
+	Prefix string `json:"prefix" binding:"required"`               // 用户名前缀
+	Suffix string `json:"suffix"`                                  // 用户名后缀（可选）
+	Count  int    `json:"count" binding:"required,min=1,max=1000"` // 生成数量
+	Domain string `json:"domain" binding:"required"`               // 邮箱域名
+}
+
+// GeneratedUserInfo 生成的用户信息
+type GeneratedUserInfo struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+// GenerateUsersResponse 批量生成用户响应
+type GenerateUsersResponse struct {
+	Users []GeneratedUserInfo `json:"users"`
+	Total int                 `json:"total"`
 }
