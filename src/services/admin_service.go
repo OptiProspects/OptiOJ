@@ -75,11 +75,38 @@ func RemoveAdmin(userID uint) error {
 	return nil
 }
 
-// 获取所有管理员列表
-func GetAllAdmins() ([]models.Admin, error) {
-	var admins []models.Admin
-	if err := config.DB.Find(&admins).Error; err != nil {
+// 获取所有管理员列表（包含详细信息）
+func GetAllAdmins() ([]models.AdminDetailItem, error) {
+	var admins []models.AdminDetailItem
+
+	err := config.DB.Model(&models.Admin{}).
+		Select(`
+			admins.id,
+			admins.user_id,
+			admins.role,
+			admins.created_at,
+			users.username,
+			users.email,
+			last_login.login_time as last_login_time,
+			last_login.ip_address as last_login_ip
+		`).
+		Joins("LEFT JOIN users ON admins.user_id = users.id").
+		Joins(`
+			LEFT JOIN (
+				SELECT 
+					user_id, 
+					MAX(login_time) as login_time,
+					ip_address
+				FROM user_logins
+				WHERE login_status = 'success'
+				GROUP BY user_id
+			) AS last_login ON admins.user_id = last_login.user_id
+		`).
+		Find(&admins).Error
+
+	if err != nil {
 		return nil, errors.New("获取管理员列表失败")
 	}
+
 	return admins, nil
 }

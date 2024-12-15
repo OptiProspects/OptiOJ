@@ -99,5 +99,12 @@ func GetAdminList(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"admins": admins})
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"admins": admins,
+			"total":  len(admins),
+		},
+		"message": "获取管理员列表成功",
+	})
 }
