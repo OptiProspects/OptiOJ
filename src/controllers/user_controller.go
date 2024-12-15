@@ -150,6 +150,7 @@ func RegisterUser(c *gin.Context) {
 func LoginUser(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		services.RecordLogin(c, 0, "failed", "请求格式错误")
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求格式错误"})
 		return
 	}
@@ -157,13 +158,23 @@ func LoginUser(c *gin.Context) {
 	// 验证用户名和密码
 	user, err := services.ValidateLogin(req.AccountInfo, req.PassWord)
 	if err != nil {
+		services.RecordLogin(c, 0, "failed", err.Error())
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 检查用户是否被封禁
+	banned, reason, _ := services.IsUserBanned(uint(user.ID))
+	if banned {
+		services.RecordLogin(c, uint(user.ID), "blocked", reason)
+		c.JSON(http.StatusForbidden, gin.H{"error": "账号已被封禁，原因：" + reason})
 		return
 	}
 
 	// 生成访问令牌和刷新令牌
 	accessToken, refreshToken, err := services.GenerateTokenPair(uint(user.ID))
 	if err != nil {
+		services.RecordLogin(c, uint(user.ID), "failed", "生成令牌失败")
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成令牌失败"})
 		return
 	}
@@ -183,6 +194,9 @@ func LoginUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储刷新令牌失败"})
 		return
 	}
+
+	// 记录成功登录
+	services.RecordLogin(c, uint(user.ID), "success", "")
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "登录成功",
@@ -225,6 +239,18 @@ func GetGlobalData(c *gin.Context) {
 	// 获取用户资料
 	profile, _ := services.GetProfile(userID)
 
+	// 获取用户权限组信息
+	isAdmin, _ := services.IsAdmin(userID)
+	isSuperAdmin, _ := services.IsSuperAdmin(userID)
+	var role string
+	if isSuperAdmin {
+		role = "super_admin"
+	} else if isAdmin {
+		role = "admin"
+	} else {
+		role = "user"
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
 			"id":       user.ID,
@@ -233,6 +259,7 @@ func GetGlobalData(c *gin.Context) {
 			"phone":    user.Phone,
 			"avatar":   avatarFilename,
 			"profile":  profile,
+			"role":     role,
 		},
 	})
 }

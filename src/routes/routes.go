@@ -19,4 +19,13 @@ func SetupRoutes(r *gin.Engine) {
 	r.DELETE("/user/removeAvatar", controllers.RemoveAvatar)
 	r.POST("/verification/sendVerificationCode", controllers.RequestVerification)
 	r.POST("/verification/validateCaptcha", controllers.ValidateGeetest)
+
+	r.POST("/admin/addAdmin", controllers.AddAdmin)
+	r.DELETE("/admin/removeAdmin", controllers.RemoveAdmin)
+	r.GET("/admin/listAdmin", controllers.GetAdminList)
+
+	r.GET("/admin/users", controllers.GetUserList)
+	r.PUT("/admin/users/:id", controllers.UpdateUser)
+	r.POST("/admin/users/:id/ban", controllers.BanUser)
+	r.POST("/admin/users/:id/unban", controllers.UnbanUser)
 }

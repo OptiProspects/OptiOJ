@@ -1,6 +1,7 @@
 package config
 
 import (
+	"OptiOJ/src/models"
 	"context"
 	"crypto/rand"
 	"os"
@@ -81,12 +82,34 @@ func InitDB() {
 		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 		if err == nil {
 			logger.Infof("数据库连接成功: %s@%s:%d/%s", config.Database.User, config.Database.Host, config.Database.Port, config.Database.DBName)
-			return
+			break
 		}
 
 		logger.Errorf("数据库连接失败: %v", err)
 		logger.Info("等待 5 秒后重试...")
 		time.Sleep(5 * time.Second)
+	}
+
+	// 检查并添加第一个管理员用户
+	var count int64
+	err = DB.Model(&models.Admin{}).Count(&count).Error
+	if err != nil {
+		logger.Fatal("检查管理员用户失败:", err)
+	}
+
+	if count == 0 {
+		// 创建第一个管理员用户
+		admin := models.Admin{
+			UserID:    1, // 假设第一个用户的 ID 为 1
+			Role:      "super_admin",
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
+
+		if err := DB.Create(&admin).Error; err != nil {
+			logger.Fatal("添加第一个管理员用户失败:", err)
+		}
+		logger.Info("第一个管理员用户已添加")
 	}
 }
 
