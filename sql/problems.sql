@@ -7,7 +7,8 @@ CREATE TABLE problems (
     samples TEXT,  -- JSON格式存储样例输入输出
     hint TEXT,
     source VARCHAR(255),
-    difficulty ENUM('easy', 'medium', 'hard') NOT NULL DEFAULT 'medium',
+    difficulty_system ENUM('normal', 'oi') NOT NULL DEFAULT 'normal',
+    difficulty VARCHAR(20) NOT NULL DEFAULT 'unrated',  -- 难度等级
     time_limit INT NOT NULL DEFAULT 1000,  -- 单位：毫秒
     memory_limit INT NOT NULL DEFAULT 256,  -- 单位：MB
     is_public BOOLEAN NOT NULL DEFAULT false,
@@ -54,7 +55,6 @@ CREATE TABLE test_cases (
     problem_id BIGINT UNSIGNED NOT NULL,
     input_file VARCHAR(255) NOT NULL,  -- 输入文件路径
     output_file VARCHAR(255) NOT NULL,  -- 输出文件路径
-    is_sample BOOLEAN NOT NULL DEFAULT false,  -- 是否为样例数据
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (problem_id) REFERENCES problems(id)
 );
