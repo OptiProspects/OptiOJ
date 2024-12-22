@@ -33,8 +33,8 @@ func main() {
 
 	routes.SetupRoutes(r)
 
-	logrus.Info("服务器启动，监听端口 8080")
-	if err := r.Run(":8080"); err != nil {
+	logrus.Info("服务器启动，监听端口 2550")
+	if err := r.Run(":2550"); err != nil {
 		logrus.Fatal("服务器启动失败: ", err)
 	}
 }
