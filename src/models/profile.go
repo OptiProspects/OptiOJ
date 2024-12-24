@@ -81,3 +81,30 @@ type UpdateProfileRequest struct {
 	City     string `json:"city"`
 	RealName string `json:"real_name"`
 }
+
+// ActivityLevel 活跃度等级
+type ActivityLevel int
+
+const (
+	ActivityLevelNone   ActivityLevel = 0 // 无提交
+	ActivityLevelLow    ActivityLevel = 1 // 低活跃度 (1-3次)
+	ActivityLevelMedium ActivityLevel = 2 // 中等活跃度 (4-6次)
+	ActivityLevelHigh   ActivityLevel = 3 // 高活跃度 (7-9次)
+	ActivityLevelSuper  ActivityLevel = 4 // 超高活跃度 (10次及以上)
+)
+
+// DailyActivity 每日活跃度
+type DailyActivity struct {
+	Date  string        `json:"date"`  // 日期，格式：YYYY-MM-DD
+	Count int           `json:"count"` // 提交次数
+	Level ActivityLevel `json:"level"` // 活跃度等级
+}
+
+// ActivityResponse 活跃度响应
+type ActivityResponse struct {
+	Activities []DailyActivity `json:"activities"`  // 活跃度数据
+	TotalDays  int             `json:"total_days"`  // 统计天数
+	MaxCount   int             `json:"max_count"`   // 单日最大提交次数
+	TotalCount int             `json:"total_count"` // 总提交次数
+	AcceptRate float64         `json:"accept_rate"` // 90天内通过率
+}

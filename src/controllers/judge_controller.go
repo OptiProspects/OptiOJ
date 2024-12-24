@@ -108,3 +108,49 @@ func GetSubmissionDetail(c *gin.Context) {
 		"data": detail,
 	})
 }
+
+// Debug 在线调试代码
+func Debug(c *gin.Context) {
+	// 获取当前用户ID
+	accessToken := c.GetHeader("Authorization")
+	_, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	var req models.DebugRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	// 验证编程语言
+	if !isValidLanguage(req.Language) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不支持的编程语言"})
+		return
+	}
+
+	response, err := services.Debug(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}
+
+// isValidLanguage 验证编程语言是否支持
+func isValidLanguage(language string) bool {
+	validLanguages := map[string]bool{
+		models.LangC:      true,
+		models.LangCPP:    true,
+		models.LangJava:   true,
+		models.LangPython: true,
+		models.LangGo:     true,
+	}
+	return validLanguages[language]
+}

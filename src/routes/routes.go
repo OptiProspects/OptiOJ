@@ -66,5 +66,8 @@ func SetupRoutes(r *gin.Engine) {
 		submissions.POST("", controllers.SubmitCode)             // 提交代码
 		submissions.GET("", controllers.GetSubmissionList)       // 获取提交记录列表
 		submissions.GET("/:id", controllers.GetSubmissionDetail) // 获取提交记录详情
+		submissions.POST("/debug", controllers.Debug)            // 在线调试代码
 	}
+
+	r.GET("/user/:id/activity", controllers.GetUserActivity) // 获取用户活跃度
 }

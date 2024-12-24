@@ -4,6 +4,7 @@ import (
 	"OptiOJ/src/config"
 	"OptiOJ/src/models"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -241,4 +242,73 @@ func judge(submission *models.Submission) error {
 	}
 
 	return nil
+}
+
+// Debug 在线调试代码
+func Debug(req *models.DebugRequest) (*models.DebugResponse, error) {
+	// 创建临时文件存储输入数据
+	inputFile, err := os.CreateTemp("", "debug_input_*.txt")
+	if err != nil {
+		return nil, fmt.Errorf("创建输入文件失败: %v", err)
+	}
+	defer os.Remove(inputFile.Name())
+	defer inputFile.Close()
+
+	// 写入输入数据
+	if _, err := inputFile.WriteString(req.Input); err != nil {
+		return nil, fmt.Errorf("写入输入数据失败: %v", err)
+	}
+
+	// 创建临时文件存储期望输出
+	outputFile, err := os.CreateTemp("", "debug_output_*.txt")
+	if err != nil {
+		return nil, fmt.Errorf("创建输出文件失败: %v", err)
+	}
+	defer os.Remove(outputFile.Name())
+	defer outputFile.Close()
+
+	// 写入期望输出数据
+	if _, err := outputFile.WriteString(req.ExpectedOutput); err != nil {
+		return nil, fmt.Errorf("写入期望输出数据失败: %v", err)
+	}
+
+	// 构造测试用例
+	testCase := models.TestCase{
+		InputFile:  inputFile.Name(),
+		OutputFile: outputFile.Name(),
+	}
+
+	// 构造判题配置
+	judgeConfig := &models.JudgeConfig{
+		TimeLimit:   req.TimeLimit,
+		MemoryLimit: req.MemoryLimit,
+		Language:    req.Language,
+		Code:        req.Code,
+	}
+
+	// 调用判题服务
+	result, err := GetJudgeClient().Submit(judgeConfig, []models.TestCase{testCase})
+	if err != nil {
+		return nil, fmt.Errorf("调用判题服务失败: %v", err)
+	}
+
+	// 构造响应
+	response := &models.DebugResponse{
+		Status:         result.Status,
+		TimeUsed:       float64(result.TimeUsed),
+		MemoryUsed:     float64(result.MemoryUsed),
+		ErrorMessage:   result.ErrorMessage,
+		ExpectedOutput: req.ExpectedOutput,
+	}
+
+	// 如果运行成功，获取输出并比对结果
+	if len(result.TestCaseResults) > 0 {
+		response.Output = result.TestCaseResults[0].ActualOutput
+		// 如果有预期输出，则进行比对
+		if req.ExpectedOutput != "" {
+			response.IsCorrect = (result.Status == models.StatusAccepted)
+		}
+	}
+
+	return response, nil
 }

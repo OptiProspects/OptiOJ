@@ -5,6 +5,7 @@ import (
 	"OptiOJ/src/location"
 	"OptiOJ/src/models"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -167,4 +168,125 @@ func UpdateProfile(userID uint, req *models.UpdateProfileRequest) error {
 
 	// 更新现有记录
 	return config.DB.Model(&profile).Updates(updates).Error
+}
+
+// GetUserActivity 获取用户活跃度
+func GetUserActivity(userID uint, days int) (*models.ActivityResponse, error) {
+	// 默认获取过去一年的数据
+	if days <= 0 {
+		days = 365
+	}
+
+	// 计算开始日期
+	now := time.Now()
+	startDate := now.AddDate(0, 0, -days+1).Format("2006-01-02")
+
+	// 获取每日提交次数和状态
+	var dailySubmissions []struct {
+		Date  time.Time `gorm:"column:date"`
+		Count int       `gorm:"column:count"`
+	}
+
+	err := config.DB.Raw(`
+		SELECT 
+			DATE(created_at) as date,
+			COUNT(*) as count
+		FROM submissions
+		WHERE user_id = ?
+		AND created_at >= ?
+		GROUP BY DATE(created_at)
+		ORDER BY date ASC
+	`, userID, startDate).Scan(&dailySubmissions).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取提交记录失败: %v", err)
+	}
+
+	// 获取90天内的通过率
+	var acceptStats struct {
+		Total    int64
+		Accepted int64
+	}
+	err = config.DB.Raw(`
+		SELECT 
+			COUNT(*) as total,
+			SUM(CASE WHEN status = 'accepted' THEN 1 ELSE 0 END) as accepted
+		FROM submissions
+		WHERE user_id = ?
+		AND created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+	`, userID).Scan(&acceptStats).Error
+
+	if err != nil {
+		return nil, fmt.Errorf("获取通过率统计失败: %v", err)
+	}
+
+	// 计算通过率
+	var acceptRate float64
+	if acceptStats.Total > 0 {
+		acceptRate = float64(acceptStats.Accepted) / float64(acceptStats.Total) * 100
+	}
+
+	// 构建日期到提交次数的映射
+	submissionMap := make(map[string]int)
+	maxCount := 0
+	totalCount := 0
+	activeDays := 0 // 有提交的天数
+	for _, ds := range dailySubmissions {
+		dateStr := ds.Date.Format("2006-01-02")
+		submissionMap[dateStr] = ds.Count
+		if ds.Count > maxCount {
+			maxCount = ds.Count
+		}
+		if ds.Count > 0 {
+			activeDays++
+		}
+		totalCount += ds.Count
+	}
+
+	// 计算平均每天的提交次数（只考虑有提交的天数）
+	var avgCount float64
+	if activeDays > 0 {
+		avgCount = float64(totalCount) / float64(activeDays)
+	}
+
+	// 根据平均提交次数计算等级阈值
+	lowThreshold := avgCount * 0.5
+	mediumThreshold := avgCount
+	highThreshold := avgCount * 1.5
+
+	// 只生成有提交记录的日期的活跃度数据
+	var activities []models.DailyActivity
+	for _, ds := range dailySubmissions {
+		dateStr := ds.Date.Format("2006-01-02")
+		count := ds.Count
+
+		// 计算活跃度等级
+		var level models.ActivityLevel
+		switch {
+		case count == 0:
+			level = models.ActivityLevelNone
+		case float64(count) <= lowThreshold:
+			level = models.ActivityLevelLow
+		case float64(count) <= mediumThreshold:
+			level = models.ActivityLevelMedium
+		case float64(count) <= highThreshold:
+			level = models.ActivityLevelHigh
+		default:
+			level = models.ActivityLevelSuper
+		}
+
+		activities = append(activities, models.DailyActivity{
+			Date:  dateStr,
+			Count: count,
+			Level: level,
+		})
+	}
+
+	return &models.ActivityResponse{
+		Activities: activities,
+		TotalDays:  days,
+		MaxCount:   maxCount,
+		TotalCount: totalCount,
+		AcceptRate: acceptRate,
+	}, nil
 }

@@ -120,3 +120,24 @@ type RunResult struct {
 	Output          string           `json:"output,omitempty"`
 	TestCaseResults []TestCaseResult `json:"test_case_results,omitempty"`
 }
+
+// DebugRequest 在线调试请求
+type DebugRequest struct {
+	Language       string `json:"language" binding:"required"`                     // 编程语言
+	Code           string `json:"code" binding:"required"`                         // 源代码
+	Input          string `json:"input"`                                           // 输入数据
+	ExpectedOutput string `json:"expected_output"`                                 // 预期输出
+	TimeLimit      int    `json:"time_limit" binding:"required,min=100,max=10000"` // 时间限制（毫秒）
+	MemoryLimit    int    `json:"memory_limit" binding:"required,min=16,max=1024"` // 内存限制（MB）
+}
+
+// DebugResponse 在线调试响应
+type DebugResponse struct {
+	Status         string  `json:"status"`          // 运行状态
+	TimeUsed       float64 `json:"time_used"`       // 运行时间（毫秒）
+	MemoryUsed     float64 `json:"memory_used"`     // 内存使用（KB）
+	Output         string  `json:"output"`          // 程序输出
+	ExpectedOutput string  `json:"expected_output"` // 预期输出
+	ErrorMessage   string  `json:"error_message"`   // 错误信息
+	IsCorrect      bool    `json:"is_correct"`      // 输出是否正确
+}
