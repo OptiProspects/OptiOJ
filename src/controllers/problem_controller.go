@@ -162,7 +162,7 @@ func GetProblemList(c *gin.Context) {
 		return
 	}
 
-	response, err := services.GetProblemList(&req, uint64(currentUserID))
+	response, err := services.GetProblemList(&req, uint(currentUserID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

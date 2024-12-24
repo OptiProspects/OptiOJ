@@ -329,82 +329,105 @@ func GetProblemDetail(problemID uint64, userID uint64) (*models.ProblemDetail, e
 }
 
 // GetProblemList 获取题目列表
-func GetProblemList(req *models.ProblemListRequest, userID uint64) (*models.ProblemListResponse, error) {
-	query := config.DB.Model(&models.Problem{})
-
-	// 处理查询条件
-	if req.Title != "" {
-		query = query.Where("title LIKE ?", "%"+req.Title+"%")
+func GetProblemList(req *models.ProblemListRequest, userID uint) (*models.ProblemListResponse, error) {
+	var problems []struct {
+		models.Problem
+		AcceptCount     int64   `gorm:"column:accept_count"`
+		SubmissionCount int64   `gorm:"column:submission_count"`
+		AcceptRate      float64 `gorm:"column:accept_rate"`
+		UserStatus      *string `gorm:"column:user_status"`
 	}
-	if req.DifficultySystem != nil {
-		query = query.Where("difficulty_system = ?", *req.DifficultySystem)
+
+	// 构建基础查询
+	query := config.DB.Table("problems").
+		Select(`
+			problems.*,
+			COUNT(CASE WHEN submissions.status = 'accepted' THEN 1 END) as accept_count,
+			COUNT(submissions.id) as submission_count,
+			IFNULL(COUNT(CASE WHEN submissions.status = 'accepted' THEN 1 END) * 100.0 / 
+				NULLIF(COUNT(submissions.id), 0), 0) as accept_rate,
+			(SELECT 
+				CASE 
+					WHEN EXISTS (SELECT 1 FROM submissions s2 WHERE s2.problem_id = problems.id AND s2.user_id = ? AND s2.status = 'accepted') THEN 'accepted'
+					WHEN EXISTS (SELECT 1 FROM submissions s2 WHERE s2.problem_id = problems.id AND s2.user_id = ?) THEN 'attempted'
+					ELSE NULL 
+				END
+			) as user_status
+		`, userID, userID).
+		Joins("LEFT JOIN submissions ON submissions.problem_id = problems.id").
+		Group("problems.id")
+
+	// 应用筛选条件
+	if req.Title != "" {
+		query = query.Where("problems.title LIKE ?", "%"+req.Title+"%")
 	}
 	if req.Difficulty != "" {
-		query = query.Where("difficulty = ?", req.Difficulty)
+		query = query.Where("problems.difficulty = ?", req.Difficulty)
 	}
-	if req.CategoryID != nil {
-		query = query.Joins("JOIN problem_category_relations ON problem_category_relations.problem_id = problems.id").
-			Where("problem_category_relations.category_id = ?", *req.CategoryID)
+	if len(req.Tags) > 0 {
+		query = query.Joins("JOIN problem_tag_relations ptr ON ptr.problem_id = problems.id").
+			Where("ptr.tag_id IN ?", req.Tags)
 	}
-	if len(req.TagIDs) > 0 {
-		query = query.Joins("JOIN problem_tag_relations ON problem_tag_relations.problem_id = problems.id").
-			Where("problem_tag_relations.tag_id IN ?", req.TagIDs)
+	if len(req.Categories) > 0 {
+		query = query.Joins("JOIN problem_category_relations pcr ON pcr.problem_id = problems.id").
+			Where("pcr.category_id IN ?", req.Categories)
 	}
 	if req.IsPublic != nil {
-		query = query.Where("is_public = ?", *req.IsPublic)
-	}
-
-	// 检查用户权限
-	isAdmin, _ := IsAdmin(uint(userID))
-	if !isAdmin {
-		query = query.Where("is_public = ? OR created_by = ?", true, userID)
+		query = query.Where("problems.is_public = ?", *req.IsPublic)
 	}
 
 	// 获取总数
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		return nil, err
+		return nil, fmt.Errorf("统计题目总数失败: %v", err)
 	}
 
-	// 分页查询
-	var problems []models.Problem
-	if err := query.Offset((req.Page - 1) * req.PageSize).
-		Limit(req.PageSize).
-		Find(&problems).Error; err != nil {
-		return nil, err
+	// 分页
+	offset := (req.Page - 1) * req.PageSize
+	if err := query.Offset(offset).Limit(req.PageSize).Find(&problems).Error; err != nil {
+		return nil, fmt.Errorf("查询题目列表失败: %v", err)
 	}
 
-	// 获取每个题目的分类和标签信息
-	var problemDetails []models.ProblemDetail
-	for _, problem := range problems {
-		detail := models.ProblemDetail{Problem: problem}
-
-		// 获取分类信息
-		if err := config.DB.Model(&problem).
-			Select("problem_categories.*").
-			Joins("JOIN problem_category_relations ON problem_category_relations.problem_id = problems.id").
-			Joins("JOIN problem_categories ON problem_categories.id = problem_category_relations.category_id").
-			Find(&detail.Categories).Error; err != nil {
-			return nil, err
+	// 转换为响应格式
+	var problemList []models.ProblemListItem
+	for _, p := range problems {
+		// 获取标签
+		var tags []models.ProblemTag
+		if err := config.DB.Table("problem_tags").
+			Joins("JOIN problem_tag_relations ptr ON ptr.tag_id = problem_tags.id").
+			Where("ptr.problem_id = ?", p.ID).
+			Find(&tags).Error; err != nil {
+			return nil, fmt.Errorf("获取题目标签失败: %v", err)
 		}
 
-		// 获取标签信息
-		if err := config.DB.Model(&problem).
-			Select("problem_tags.*").
-			Joins("JOIN problem_tag_relations ON problem_tag_relations.problem_id = problems.id").
-			Joins("JOIN problem_tags ON problem_tags.id = problem_tag_relations.tag_id").
-			Find(&detail.Tags).Error; err != nil {
-			return nil, err
+		// 获取分类
+		var categories []models.ProblemCategory
+		if err := config.DB.Table("problem_categories").
+			Joins("JOIN problem_category_relations pcr ON pcr.category_id = problem_categories.id").
+			Where("pcr.problem_id = ?", p.ID).
+			Find(&categories).Error; err != nil {
+			return nil, fmt.Errorf("获取题目分类失败: %v", err)
 		}
 
-		problemDetails = append(problemDetails, detail)
+		item := models.ProblemListItem{
+			ID:              p.ID,
+			Title:           p.Title,
+			Difficulty:      p.Difficulty,
+			Tags:            tags,
+			Categories:      categories,
+			AcceptCount:     p.AcceptCount,
+			SubmissionCount: p.SubmissionCount,
+			AcceptRate:      p.AcceptRate,
+			UserStatus:      p.UserStatus,
+		}
+		problemList = append(problemList, item)
 	}
 
 	return &models.ProblemListResponse{
-		Problems: problemDetails,
-		Total:    total,
-		Page:     req.Page,
-		PageSize: req.PageSize,
+		Problems:    problemList,
+		TotalCount:  total,
+		PageSize:    req.PageSize,
+		CurrentPage: req.Page,
 	}, nil
 }
 

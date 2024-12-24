@@ -204,24 +204,36 @@ type UpdateProblemRequest struct {
 	TagIDs            []uint64          `json:"tag_ids"`
 }
 
-// ProblemListRequest 题目列表请求
+// ProblemListRequest 获取题目列表的请求参数
 type ProblemListRequest struct {
-	Page             int               `form:"page" binding:"required,min=1"`
-	PageSize         int               `form:"page_size" binding:"required,min=1,max=100"`
-	Title            string            `form:"title"`
-	DifficultySystem *DifficultySystem `form:"difficulty_system"`
-	Difficulty       string            `form:"difficulty"`
-	CategoryID       *uint64           `form:"category_id"`
-	TagIDs           []uint64          `form:"tag_ids"`
-	IsPublic         *bool             `form:"is_public"`
+	Page       int      `form:"page" binding:"required,min=1"`
+	PageSize   int      `form:"page_size" binding:"required,min=1,max=100"`
+	Title      string   `form:"title"`
+	Difficulty string   `form:"difficulty"`
+	Tags       []uint64 `form:"tags"`
+	Categories []uint64 `form:"categories"`
+	IsPublic   *bool    `form:"is_public"`
+}
+
+// ProblemListItem 题目列表项
+type ProblemListItem struct {
+	ID              uint64            `json:"id"`
+	Title           string            `json:"title"`
+	Difficulty      string            `json:"difficulty"`
+	Tags            []ProblemTag      `json:"tags"`
+	Categories      []ProblemCategory `json:"categories"`
+	AcceptCount     int64             `json:"accept_count"`     // 通过次数
+	SubmissionCount int64             `json:"submission_count"` // 提交总数
+	AcceptRate      float64           `json:"accept_rate"`      // 通过率
+	UserStatus      *string           `json:"user_status"`      // 用户状态：null-未提交, accepted-已通过, attempted-尝试过
 }
 
 // ProblemListResponse 题目列表响应
 type ProblemListResponse struct {
-	Problems []ProblemDetail `json:"problems"`
-	Total    int64           `json:"total"`
-	Page     int             `json:"page"`
-	PageSize int             `json:"page_size"`
+	Problems    []ProblemListItem `json:"problems"`
+	TotalCount  int64             `json:"total_count"`
+	PageSize    int               `json:"page_size"`
+	CurrentPage int               `json:"current_page"`
 }
 
 // TestCaseUploadRequest 测试用例上传请求
