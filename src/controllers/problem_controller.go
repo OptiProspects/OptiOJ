@@ -120,12 +120,14 @@ func DeleteProblem(c *gin.Context) {
 
 // GetProblemDetail 获取题目详情
 func GetProblemDetail(c *gin.Context) {
-	// 获取当前用户ID
+	// 获取当前用户ID（可选）
+	var currentUserID uint
 	accessToken := c.GetHeader("Authorization")
-	currentUserID, err := services.ValidateAccessToken(accessToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
-		return
+	if accessToken != "" {
+		userID, err := services.ValidateAccessToken(accessToken)
+		if err == nil {
+			currentUserID = userID
+		}
 	}
 
 	problemID, err := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -148,12 +150,14 @@ func GetProblemDetail(c *gin.Context) {
 
 // GetProblemList 获取题目列表
 func GetProblemList(c *gin.Context) {
-	// 获取当前用户ID
+	// 获取当前用户ID（可选）
+	var currentUserID uint
 	accessToken := c.GetHeader("Authorization")
-	currentUserID, err := services.ValidateAccessToken(accessToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
-		return
+	if accessToken != "" {
+		userID, err := services.ValidateAccessToken(accessToken)
+		if err == nil {
+			currentUserID = userID
+		}
 	}
 
 	var req models.ProblemListRequest
@@ -162,7 +166,13 @@ func GetProblemList(c *gin.Context) {
 		return
 	}
 
-	response, err := services.GetProblemList(&req, uint(currentUserID))
+	// 未登录用户只能看到公开题目
+	if currentUserID == 0 {
+		isPublic := true
+		req.IsPublic = &isPublic
+	}
+
+	response, err := services.GetProblemList(&req, currentUserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

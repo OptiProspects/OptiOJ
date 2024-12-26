@@ -298,6 +298,10 @@ func GetProblemDetail(problemID uint64, userID uint64) (*models.ProblemDetail, e
 
 	// 检查访问权限
 	if !problem.IsPublic {
+		// 如果题目不是公开的，只有管理员和题目创建者可以访问
+		if userID == 0 {
+			return nil, errors.New("无权访问该题目")
+		}
 		isAdmin, _ := IsAdmin(uint(userID))
 		if !isAdmin && problem.CreatedBy != userID {
 			return nil, errors.New("无权访问该题目")
@@ -325,6 +329,26 @@ func GetProblemDetail(problemID uint64, userID uint64) (*models.ProblemDetail, e
 		return nil, err
 	}
 
+	// 获取用户提交状态
+	if userID > 0 {
+		type Result struct {
+			Status *string `gorm:"column:status"`
+		}
+		var result Result
+		err := config.DB.Raw(`
+			SELECT 
+				CASE 
+					WHEN EXISTS (SELECT 1 FROM submissions WHERE problem_id = ? AND user_id = ? AND status = 'accepted') THEN 'accepted'
+					WHEN EXISTS (SELECT 1 FROM submissions WHERE problem_id = ? AND user_id = ?) THEN 'attempted'
+					ELSE NULL 
+				END as status
+		`, problemID, userID, problemID, userID).Scan(&result).Error
+		if err != nil {
+			return nil, fmt.Errorf("获取用户提交状态失败: %v", err)
+		}
+		detail.UserStatus = result.Status
+	}
+
 	return &detail, nil
 }
 
@@ -348,12 +372,13 @@ func GetProblemList(req *models.ProblemListRequest, userID uint) (*models.Proble
 				NULLIF(COUNT(submissions.id), 0), 0) as accept_rate,
 			(SELECT 
 				CASE 
+					WHEN ? = 0 THEN NULL
 					WHEN EXISTS (SELECT 1 FROM submissions s2 WHERE s2.problem_id = problems.id AND s2.user_id = ? AND s2.status = 'accepted') THEN 'accepted'
 					WHEN EXISTS (SELECT 1 FROM submissions s2 WHERE s2.problem_id = problems.id AND s2.user_id = ?) THEN 'attempted'
 					ELSE NULL 
 				END
 			) as user_status
-		`, userID, userID).
+		`, userID, userID, userID).
 		Joins("LEFT JOIN submissions ON submissions.problem_id = problems.id").
 		Group("problems.id")
 
@@ -374,6 +399,9 @@ func GetProblemList(req *models.ProblemListRequest, userID uint) (*models.Proble
 	}
 	if req.IsPublic != nil {
 		query = query.Where("problems.is_public = ?", *req.IsPublic)
+	} else if userID == 0 {
+		// 未登录用户只能看到公开题目
+		query = query.Where("problems.is_public = ?", true)
 	}
 
 	// 获取总数

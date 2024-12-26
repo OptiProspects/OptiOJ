@@ -166,6 +166,7 @@ type ProblemDetail struct {
 	Problem
 	Categories []ProblemCategory `json:"categories"`
 	Tags       []ProblemTag      `json:"tags"`
+	UserStatus *string           `json:"user_status"` // 用户状态：null-未提交, accepted-已通过, attempted-尝试过
 }
 
 // CreateProblemRequest 创建题目请求
