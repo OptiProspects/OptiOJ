@@ -46,13 +46,20 @@ func SetupRoutes(r *gin.Engine) {
 	// 题目管理相关路由
 	problems := r.Group("/problems")
 	{
-		problems.POST("", controllers.CreateProblem)                                   // 创建题目
-		problems.PUT("/:id", controllers.UpdateProblem)                                // 更新题目
+		problems.POST("", controllers.CreateProblem)                                   // 创建题目                          // 更新题目
 		problems.DELETE("/:id", controllers.DeleteProblem)                             // 删除题目
 		problems.GET("/:id", controllers.GetProblemDetail)                             // 获取题目详情
 		problems.GET("", controllers.GetProblemList)                                   // 获取题目列表
 		problems.POST("/switch-difficulty-system", controllers.SwitchDifficultySystem) // 切换难度等级系统
 		problems.GET("/difficulty-system", controllers.GetDifficultySystem)            // 获取难度等级系统
+	}
+
+	// 管理员专用的题目管理路由
+	adminProblems := r.Group("/admin/problems")
+	{
+		adminProblems.GET("", controllers.AdminGetProblemList)       // 管理员获取题目列表
+		adminProblems.GET("/:id", controllers.AdminGetProblemDetail) // 管理员获取题目详情
+		adminProblems.PUT("/:id", controllers.AdminUpdateProblem)    // 管理员更新题目
 	}
 
 	// 标签管理相关路由

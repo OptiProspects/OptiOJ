@@ -46,8 +46,100 @@ func CreateProblem(c *gin.Context) {
 	})
 }
 
-// UpdateProblem 更新题目
-func UpdateProblem(c *gin.Context) {
+// AdminGetProblemList 管理员获取题目列表
+func AdminGetProblemList(c *gin.Context) {
+	// 验证管理员权限
+	accessToken := c.GetHeader("Authorization")
+	currentUserID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	isAdmin, _ := services.IsAdmin(uint(currentUserID))
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+		return
+	}
+
+	var req models.ProblemListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	// 管理员可以看到所有题目，不需要设置 IsPublic 过滤
+	response, err := services.GetProblemList(&req, uint(currentUserID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}
+
+// AdminGetProblemDetail 管理员获取题目详情
+func AdminGetProblemDetail(c *gin.Context) {
+	// 验证管理员权限
+	accessToken := c.GetHeader("Authorization")
+	currentUserID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	isAdmin, _ := services.IsAdmin(uint(currentUserID))
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+		return
+	}
+
+	problemID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的题目ID"})
+		return
+	}
+
+	problem, err := services.GetProblemDetail(problemID, uint64(currentUserID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// 获取额外的管理员信息
+	adminInfo := struct {
+		CreatedByUser models.User                  `json:"created_by_user"`
+		TestCases     []models.TestCaseWithLocalID `json:"test_cases"`
+	}{}
+
+	// 获取创建者信息
+	if err := services.GetUserByID(uint(problem.CreatedBy), &adminInfo.CreatedByUser); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取创建者信息失败"})
+		return
+	}
+
+	// 获取测试用例信息
+	testCases, err := services.GetTestCases(problemID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取测试用例信息失败"})
+		return
+	}
+	adminInfo.TestCases = testCases
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"problem":    problem,
+			"admin_info": adminInfo,
+		},
+	})
+}
+
+// AdminUpdateProblem 管理员更新题目
+func AdminUpdateProblem(c *gin.Context) {
 	// 验证管理员权限
 	accessToken := c.GetHeader("Authorization")
 	currentUserID, err := services.ValidateAccessToken(accessToken)

@@ -184,3 +184,8 @@ func generateRandomString(length int) string {
 	}
 	return string(b)
 }
+
+// GetUserByID 根据用户ID获取用户信息
+func GetUserByID(userID uint, user *models.User) error {
+	return config.DB.First(user, userID).Error
+}
