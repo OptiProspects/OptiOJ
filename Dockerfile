@@ -4,7 +4,9 @@ WORKDIR /OptiOJ
 COPY . .
 
 RUN apk add --no-cache \
-    gcc
+    gcc \
+    musl-dev \
+    libc-dev
 
 RUN go mod download
 RUN CGO_ENABLED=1 GOOS=linux go build -o OptiOJ .
