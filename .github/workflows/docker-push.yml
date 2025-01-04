@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 env:
-  DOCKER_IMAGE: optioj/optioj
+  DOCKER_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/optioj
   PLATFORMS: linux/amd64,linux/arm64
 
 jobs:
