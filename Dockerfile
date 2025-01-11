@@ -15,6 +15,7 @@ FROM alpine:latest
 
 WORKDIR /OptiOJ
 COPY --from=builder /OptiOJ/OptiOJ .
+COPY --from=builder /OptiOJ/sql ./sql
 
 EXPOSE 2550
 
