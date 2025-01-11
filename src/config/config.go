@@ -138,9 +138,40 @@ func InitDB() {
 		logger.Fatal(err)
 	}
 
+	// 首先尝试连接 MySQL 服务器（不指定数据库）
+	rootDSN := config.Database.User + ":" + config.Database.Password + "@tcp(" + config.Database.Host + ":" + strconv.Itoa(config.Database.Port) + ")/?charset=utf8mb4&parseTime=True&loc=Local"
+
+	rootDB, err := gorm.Open(mysql.Open(rootDSN), &gorm.Config{})
+	if err != nil {
+		logger.Fatalf("连接 MySQL 服务器失败: %v", err)
+	}
+
+	// 检查数据库是否存在
+	var count int64
+	result := rootDB.Raw("SELECT COUNT(*) FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ?", config.Database.DBName).Scan(&count)
+	if result.Error != nil {
+		logger.Fatalf("检查数据库是否存在失败: %v", result.Error)
+	}
+
+	// 如果数据库不存在，创建它
+	if count == 0 {
+		logger.Infof("数据库 %s 不存在，正在创建...", config.Database.DBName)
+		if err := rootDB.Exec("CREATE DATABASE " + config.Database.DBName + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
+			logger.Fatalf("创建数据库失败: %v", err)
+		}
+		logger.Infof("数据库 %s 创建成功", config.Database.DBName)
+	}
+
+	// 关闭 rootDB 连接
+	sqlDB, err := rootDB.DB()
+	if err != nil {
+		logger.Fatalf("获取底层数据库连接失败: %v", err)
+	}
+	sqlDB.Close()
+
+	// 连接到指定的数据库
 	dsn := config.Database.User + ":" + config.Database.Password + "@tcp(" + config.Database.Host + ":" + strconv.Itoa(config.Database.Port) + ")/" + config.Database.DBName + "?charset=utf8mb4&parseTime=True&loc=Local"
 
-	var err error
 	for {
 		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 		if err == nil {
@@ -157,7 +188,6 @@ func InitDB() {
 	CheckAndInitializeDatabase()
 
 	// 检查并添加第一个管理员用户
-	var count int64
 	err = DB.Model(&models.Admin{}).Count(&count).Error
 	if err != nil {
 		logger.Fatal("检查管理员用户失败:", err)
