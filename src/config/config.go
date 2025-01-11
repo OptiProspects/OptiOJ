@@ -5,7 +5,10 @@ import (
 	"context"
 	"crypto/rand"
 	"os"
+	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -69,6 +72,66 @@ var logger = logrus.New()
 var ctx = context.Background()
 var JWTSecret []byte
 
+func CheckAndInitializeDatabase() {
+	// 检查数据库是否需要初始化
+	var tableCount int
+	row := DB.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = ?", DB.Migrator().CurrentDatabase()).Row()
+	if err := row.Scan(&tableCount); err != nil {
+		logger.Fatal("检查数据库表失败:", err)
+	}
+
+	// 如果数据库中没有表，则执行初始化
+	if tableCount == 0 {
+		logger.Info("检测到新数据库，开始执行初始化脚本...")
+
+		// 获取 sql 目录路径
+		sqlDir := "sql"
+		if _, err := os.Stat(sqlDir); os.IsNotExist(err) {
+			// 如果当前目录下没有 sql 目录，尝试上级目录（针对 Docker 环境）
+			sqlDir = "../sql"
+			if _, err := os.Stat(sqlDir); os.IsNotExist(err) {
+				logger.Fatal("找不到 SQL 脚本目录")
+			}
+		}
+
+		// 读取 SQL 目录下的所有文件
+		entries, err := os.ReadDir(sqlDir)
+		if err != nil {
+			logger.Fatalf("读取 SQL 目录失败: %v", err)
+		}
+
+		// 过滤出 .sql 文件并排序
+		var sqlFiles []string
+		for _, entry := range entries {
+			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
+				sqlFiles = append(sqlFiles, filepath.Join(sqlDir, entry.Name()))
+			}
+		}
+		sort.Strings(sqlFiles)
+
+		if len(sqlFiles) == 0 {
+			logger.Fatal("SQL 目录中没有找到 .sql 文件")
+		}
+
+		// 按顺序执行所有 SQL 文件
+		for _, file := range sqlFiles {
+			sqlContent, err := os.ReadFile(file)
+			if err != nil {
+				logger.Fatalf("读取 SQL 文件 %s 失败: %v", file, err)
+			}
+
+			if err := DB.Exec(string(sqlContent)).Error; err != nil {
+				logger.Fatalf("执行 SQL 文件 %s 失败: %v", file, err)
+			}
+			logger.Infof("成功执行 SQL 文件: %s", filepath.Base(file))
+		}
+
+		logger.Info("数据库初始化完成")
+	} else {
+		logger.Info("数据库已存在，跳过初始化")
+	}
+}
+
 func InitDB() {
 	var config Config
 	if _, err := toml.DecodeFile("config.toml", &config); err != nil {
@@ -89,6 +152,9 @@ func InitDB() {
 		logger.Info("等待 5 秒后重试...")
 		time.Sleep(5 * time.Second)
 	}
+
+	// 检查并初始化数据库
+	CheckAndInitializeDatabase()
 
 	// 检查并添加第一个管理员用户
 	var count int64
