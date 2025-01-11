@@ -120,8 +120,18 @@ func CheckAndInitializeDatabase() {
 				logger.Fatalf("读取 SQL 文件 %s 失败: %v", file, err)
 			}
 
-			if err := DB.Exec(string(sqlContent)).Error; err != nil {
-				logger.Fatalf("执行 SQL 文件 %s 失败: %v", file, err)
+			// 分割 SQL 语句并逐个执行
+			statements := strings.Split(string(sqlContent), ";")
+			for _, stmt := range statements {
+				// 跳过空语句
+				stmt = strings.TrimSpace(stmt)
+				if stmt == "" {
+					continue
+				}
+
+				if err := DB.Exec(stmt).Error; err != nil {
+					logger.Fatalf("执行 SQL 语句失败 [%s]: %v\n语句内容: %s", filepath.Base(file), err, stmt)
+				}
 			}
 			logger.Infof("成功执行 SQL 文件: %s", filepath.Base(file))
 		}
@@ -139,7 +149,7 @@ func InitDB() {
 	}
 
 	// 首先尝试连接 MySQL 服务器（不指定数据库）
-	rootDSN := config.Database.User + ":" + config.Database.Password + "@tcp(" + config.Database.Host + ":" + strconv.Itoa(config.Database.Port) + ")/?charset=utf8mb4&parseTime=True&loc=Local"
+	rootDSN := config.Database.User + ":" + config.Database.Password + "@tcp(" + config.Database.Host + ":" + strconv.Itoa(config.Database.Port) + ")/?charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true"
 
 	rootDB, err := gorm.Open(mysql.Open(rootDSN), &gorm.Config{})
 	if err != nil {
@@ -170,7 +180,7 @@ func InitDB() {
 	sqlDB.Close()
 
 	// 连接到指定的数据库
-	dsn := config.Database.User + ":" + config.Database.Password + "@tcp(" + config.Database.Host + ":" + strconv.Itoa(config.Database.Port) + ")/" + config.Database.DBName + "?charset=utf8mb4&parseTime=True&loc=Local"
+	dsn := config.Database.User + ":" + config.Database.Password + "@tcp(" + config.Database.Host + ":" + strconv.Itoa(config.Database.Port) + ")/" + config.Database.DBName + "?charset=utf8mb4&parseTime=True&loc=Local&multiStatements=true"
 
 	for {
 		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
