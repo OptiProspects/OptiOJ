@@ -6,7 +6,6 @@ import (
 	"crypto/rand"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -100,24 +99,38 @@ func CheckAndInitializeDatabase() {
 			logger.Fatalf("读取 SQL 目录失败: %v", err)
 		}
 
-		// 过滤出 .sql 文件并排序
-		var sqlFiles []string
+		// 定义表的依赖关系和执行顺序
+		sqlFileOrder := []string{
+			"users.sql",        // 用户表必须最先创建
+			"profile.sql",      // 用户资料表依赖用户表
+			"admin.sql",        // 管理员表依赖用户表
+			"banned.sql",       // 封禁表依赖用户表
+			"loginHistory.sql", // 登录历史依赖用户表
+			"teams.sql",        // 团队表
+			"problems.sql",     // 题目表
+			"judge.sql",        // 判题表
+			"messages.sql",     // 消息表
+		}
+
+		// 创建文件名到路径的映射
+		fileMap := make(map[string]string)
 		for _, entry := range entries {
 			if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".sql") {
-				sqlFiles = append(sqlFiles, filepath.Join(sqlDir, entry.Name()))
+				fileMap[entry.Name()] = filepath.Join(sqlDir, entry.Name())
 			}
 		}
-		sort.Strings(sqlFiles)
 
-		if len(sqlFiles) == 0 {
-			logger.Fatal("SQL 目录中没有找到 .sql 文件")
-		}
+		// 按照指定顺序执行 SQL 文件
+		for _, fileName := range sqlFileOrder {
+			filePath, exists := fileMap[fileName]
+			if !exists {
+				logger.Warnf("未找到 SQL 文件: %s，跳过", fileName)
+				continue
+			}
 
-		// 按顺序执行所有 SQL 文件
-		for _, file := range sqlFiles {
-			sqlContent, err := os.ReadFile(file)
+			sqlContent, err := os.ReadFile(filePath)
 			if err != nil {
-				logger.Fatalf("读取 SQL 文件 %s 失败: %v", file, err)
+				logger.Fatalf("读取 SQL 文件 %s 失败: %v", fileName, err)
 			}
 
 			// 分割 SQL 语句并逐个执行
@@ -130,10 +143,10 @@ func CheckAndInitializeDatabase() {
 				}
 
 				if err := DB.Exec(stmt).Error; err != nil {
-					logger.Fatalf("执行 SQL 语句失败 [%s]: %v\n语句内容: %s", filepath.Base(file), err, stmt)
+					logger.Fatalf("执行 SQL 语句失败 [%s]: %v\n语句内容: %s", fileName, err, stmt)
 				}
 			}
-			logger.Infof("成功执行 SQL 文件: %s", filepath.Base(file))
+			logger.Infof("成功执行 SQL 文件: %s", fileName)
 		}
 
 		logger.Info("数据库初始化完成")
