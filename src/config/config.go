@@ -101,15 +101,15 @@ func CheckAndInitializeDatabase() {
 
 		// 定义表的依赖关系和执行顺序
 		sqlFileOrder := []string{
-			"users.sql",        // 用户表必须最先创建
-			"profile.sql",      // 用户资料表依赖用户表
-			"admin.sql",        // 管理员表依赖用户表
-			"banned.sql",       // 封禁表依赖用户表
-			"loginHistory.sql", // 登录历史依赖用户表
-			"teams.sql",        // 团队表
-			"problems.sql",     // 题目表
-			"judge.sql",        // 判题表
-			"messages.sql",     // 消息表
+			"users.sql",        // 基础表，无依赖
+			"profile.sql",      // 依赖 users
+			"admin.sql",        // 依赖 users
+			"banned.sql",       // 依赖 users
+			"loginHistory.sql", // 依赖 users
+			"problems.sql",     // 基础表，无依赖
+			"teams.sql",        // 依赖 users, problems
+			"judge.sql",        // 依赖 users, problems
+			"messages.sql",     // 依赖 users
 		}
 
 		// 创建文件名到路径的映射
@@ -211,24 +211,37 @@ func InitDB() {
 	CheckAndInitializeDatabase()
 
 	// 检查并添加第一个管理员用户
-	err = DB.Model(&models.Admin{}).Count(&count).Error
+	var adminCount int64
+	err = DB.Model(&models.Admin{}).Count(&adminCount).Error
 	if err != nil {
 		logger.Fatal("检查管理员用户失败:", err)
 	}
 
-	if count == 0 {
-		// 创建第一个管理员用户
+	if adminCount == 0 {
+		// 首先创建超级管理员用户
+		superUser := models.User{
+			Username: "admin",
+			Password: "$2a$10$RIJBMqcxE/qi8Hs8YxjA1.ZFxiJGO6H.YxBXDDEoVxYYqZYxIrIGi", // 默认密码: admin
+			Email:    "admin@optioj.com",
+		}
+
+		if err := DB.Create(&superUser).Error; err != nil {
+			logger.Fatal("添加超级管理员用户失败:", err)
+		}
+		logger.Info("超级管理员用户已创建")
+
+		// 创建管理员记录
 		admin := models.Admin{
-			UserID:    1, // 假设第一个用户的 ID 为 1
+			UserID:    superUser.ID,
 			Role:      "super_admin",
 			CreatedAt: time.Now(),
 			UpdatedAt: time.Now(),
 		}
 
 		if err := DB.Create(&admin).Error; err != nil {
-			logger.Fatal("添加第一个管理员用户失败:", err)
+			logger.Fatal("添加管理员记录失败:", err)
 		}
-		logger.Info("第一个管理员用户已添加")
+		logger.Info("管理员记录已添加")
 	}
 }
 
