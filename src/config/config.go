@@ -23,6 +23,7 @@ type Config struct {
 	Redis    RedisConfig
 	Aliyun   AliyunConfig
 	Geetest  GeetestConfig
+	Judge    JudgeConfig
 }
 
 type DatabaseConfig struct {
@@ -62,10 +63,16 @@ type GeetestConfig struct {
 	CaptchaKey string
 }
 
+type JudgeConfig struct {
+	Host string
+	Port int
+}
+
 var DB *gorm.DB
 var SMTP SMTPConfig
 var Aliyun AliyunConfig
 var Geetest GeetestConfig
+var Judge JudgeConfig
 var RedisClient *redis.Client
 var logger = logrus.New()
 var ctx = context.Background()
@@ -287,6 +294,7 @@ func InitConfig() {
 	SMTP = config.SMTP
 	Aliyun = config.Aliyun
 	Geetest = config.Geetest
+	Judge = config.Judge
 
 	// 初始化 JWT 密钥
 	InitJWTSecret()

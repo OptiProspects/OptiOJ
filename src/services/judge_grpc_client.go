@@ -1,6 +1,7 @@
 package services
 
 import (
+	"OptiOJ/src/config"
 	"OptiOJ/src/models"
 	pb "OptiOJ/src/proto/judge_grpc_service"
 	"context"
@@ -23,7 +24,22 @@ var judgeGrpcClient *JudgeGrpcClient
 func InitJudgeGrpcClient() error {
 	logrus.Info("开始初始化判题客户端...")
 
-	conn, err := grpc.Dial("127.0.0.1:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// 使用全局配置
+	host := config.Judge.Host
+	port := config.Judge.Port
+
+	// 如果配置为空，使用默认值
+	if host == "" {
+		host = "127.0.0.1"
+	}
+	if port == 0 {
+		port = 50051
+	}
+
+	address := fmt.Sprintf("%s:%d", host, port)
+	logrus.Infof("正在连接判题服务器: %s", address)
+
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		logrus.Errorf("连接判题服务失败: %v", err)
 		return fmt.Errorf("无法连接到判题服务: %v", err)

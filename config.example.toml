@@ -30,3 +30,7 @@ UseSSL = false # 是否启用 SSL（对于 SMTPS 设置为 true，对于普通 S
 user = "your-email@example.com"
 sender = "your-email@example.com"
 password = "your-email-password"
+
+[judge]
+host = "judge.example.com"  # 自定义判题服务器地址
+port = 8080                 # 自定义端口
