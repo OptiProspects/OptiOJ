@@ -33,4 +33,4 @@ password = "your-email-password"
 
 [judge]
 host = "judge.example.com"  # 自定义判题服务器地址
-port = 8080                 # 自定义端口
+port = 50051                 # 自定义端口

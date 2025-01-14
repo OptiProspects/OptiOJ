@@ -3,11 +3,11 @@ package models
 import "time"
 
 type User struct {
-	ID       uint64 `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"-"`
-	Phone    string `json:"phone,omitempty"`
-	Email    string `json:"email,omitempty"`
+	ID       uint64  `json:"id"`
+	Username string  `json:"username"`
+	Password string  `json:"-"`
+	Phone    *string `json:"phone,omitempty" gorm:"uniqueIndex"`
+	Email    string  `json:"email,omitempty"`
 }
 
 type RegisterRequest struct {
@@ -17,6 +17,8 @@ type RegisterRequest struct {
 	RequestPhone     string `json:"requestPhone"`
 	VerificationCode string `json:"verificationCode"`
 	VerificationType string `json:"verificationType"` // "email" 或 "phone"
+	Province         string `json:"province"`         // 省份
+	City             string `json:"city"`             // 城市
 }
 
 type LoginRequest struct {

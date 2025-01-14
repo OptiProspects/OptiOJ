@@ -99,16 +99,8 @@ func RegisterUser(c *gin.Context) {
 		return
 	}
 
-	// 创建用户对象
-	user := &models.User{
-		Username: req.UserName,
-		Password: req.PassWord,
-		Email:    req.RequestEmail,
-		Phone:    req.RequestPhone,
-	}
-
 	// 注册用户
-	userID, err := services.RegisterUser(user)
+	userID, err := services.RegisterUser(&req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

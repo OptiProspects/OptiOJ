@@ -7,18 +7,18 @@ import (
 )
 
 type Profile struct {
-	ID       int       `json:"id"`
+	ID       int       `json:"id" gorm:"primaryKey"`
 	UserID   int       `json:"user_id"`
-	Bio      string    `json:"bio"`       // 个人签名
-	Gender   string    `json:"gender"`    // 性别
-	School   string    `json:"school"`    // 学校
-	Birthday time.Time `json:"birthday"`  // 生日（带时区）
-	Location string    `json:"-"`         // 现居地(内部存储用)
-	Province string    `json:"province"`  // 省份
-	City     string    `json:"city"`      // 城市
-	RealName string    `json:"real_name"` // 真实姓名
-	CreateAt time.Time `json:"create_at"` // 创建时间
-	UpdateAt time.Time `json:"update_at"` // 更新时间
+	Bio      string    `json:"bio"`               // 个人签名
+	Gender   string    `json:"gender"`            // 性别
+	School   string    `json:"school"`            // 学校
+	Birthday time.Time `json:"birthday"`          // 生日（带时区）
+	Location string    `json:"-"`                 // 现居地(内部存储用)
+	Province string    `json:"province" gorm:"-"` // 省份（仅用于JSON）
+	City     string    `json:"city" gorm:"-"`     // 城市（仅用于JSON）
+	RealName string    `json:"real_name"`         // 真实姓名
+	CreateAt time.Time `json:"create_at"`         // 创建时间
+	UpdateAt time.Time `json:"update_at"`         // 更新时间
 }
 
 // UnmarshalJSON 实现自定义的 JSON 解析
