@@ -65,8 +65,13 @@ func (p Profile) MarshalJSON() ([]byte, error) {
 		Province string `json:"province"`
 		City     string `json:"city"`
 	}{
-		Alias:    (Alias)(p),
-		Birthday: p.Birthday.Format(time.RFC3339), // 使用 ISO 8601 格式输出带时区的时间
+		Alias: (Alias)(p),
+		Birthday: func() string {
+			if p.Birthday == nil {
+				return ""
+			}
+			return p.Birthday.Format(time.RFC3339)
+		}(),
 		Province: province,
 		City:     city,
 	})
