@@ -65,7 +65,13 @@ func RegisterUser(req *models.RegisterRequest) (uint, error) {
 		// 创建用户资料
 		now := time.Now()
 		profile := models.Profile{
-			UserID:   int(user.ID),
+			UserID:   int(userID),
+			Bio:      "",
+			Gender:   "",
+			School:   "",
+			Birthday: nil,
+			Location: "",
+			RealName: "",
 			CreateAt: now,
 			UpdateAt: now,
 		}
