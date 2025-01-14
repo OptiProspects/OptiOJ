@@ -127,7 +127,7 @@ func UpdateProfile(userID uint, req *models.UpdateProfileRequest) error {
 			profile.School = req.School
 		}
 		if !birthday.IsZero() {
-			profile.Birthday = birthday
+			profile.Birthday = &birthday
 		}
 		if locationStr != "" {
 			profile.Location = locationStr
