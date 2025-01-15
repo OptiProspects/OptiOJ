@@ -75,7 +75,7 @@ func RevokeSession(c *gin.Context) {
 
 // Logout 退出当前设备
 func Logout(c *gin.Context) {
-	refreshToken := c.GetHeader("Refresh-Token")
+	refreshToken := c.GetHeader("Authorization")
 	if refreshToken == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "未提供刷新令牌"})
 		return
