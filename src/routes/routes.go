@@ -20,6 +20,15 @@ func SetupRoutes(r *gin.Engine) {
 	r.POST("/verification/sendVerificationCode", controllers.RequestVerification)
 	r.POST("/verification/validateCaptcha", controllers.ValidateGeetest)
 
+	// 会话管理相关路由
+	sessions := r.Group("/sessions")
+	{
+		sessions.GET("/activeSessions", controllers.GetActiveSessions)           // 获取活跃会话列表
+		sessions.POST("/logoutSession", controllers.Logout)                      // 退出当前设备
+		sessions.POST("/logoutAllSessions", controllers.LogoutAllDevices)        // 退出所有设备
+		sessions.DELETE("/logoutSession/:session_id", controllers.RevokeSession) // 吊销指定会话
+	}
+
 	r.POST("/admin/addAdmin", controllers.AddAdmin)
 	r.DELETE("/admin/removeAdmin", controllers.RemoveAdmin)
 	r.GET("/admin/listAdmin", controllers.GetAdminList)

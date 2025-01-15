@@ -41,10 +41,14 @@ func AuthController() gin.HandlerFunc {
 	}
 }
 
+// RefreshToken 刷新访问令牌
 func RefreshToken(c *gin.Context) {
 	refreshToken := c.GetHeader("Authorization")
+	if refreshToken == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "未提供刷新令牌"})
+		return
+	}
 
-	// 验证刷新令牌
 	userID, err := services.ValidateRefreshToken(refreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的刷新令牌"})
@@ -54,14 +58,20 @@ func RefreshToken(c *gin.Context) {
 	// 生成新的访问令牌
 	newAccessToken, err := services.GenerateToken(userID, 2*time.Hour)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成新令牌失败"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "生成访问令牌失败"})
 		return
 	}
 
-	// 存储新的访问令牌信息到 Redis
+	// 存储新的访问令牌
 	accessSessionKey := "access_token:" + newAccessToken
 	if err := config.RedisClient.Set(c, accessSessionKey, userID, 2*time.Hour).Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储访问令牌失败"})
+		return
+	}
+
+	// 更新会话信息
+	if err := services.UpdateSessionLastRefresh(c, refreshToken); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "更新会话信息失败"})
 		return
 	}
 

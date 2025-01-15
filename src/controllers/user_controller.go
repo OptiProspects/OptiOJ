@@ -129,6 +129,12 @@ func RegisterUser(c *gin.Context) {
 		return
 	}
 
+	// 保存会话信息
+	if err := services.SaveSessionInfo(c, refreshToken, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存会话信息失败"})
+		return
+	}
+
 	// 注册成功后删除验证码
 	config.RedisClient.Del(c, redisKey)
 
@@ -184,6 +190,12 @@ func LoginUser(c *gin.Context) {
 	// 刷新令牌有效期30天
 	if err := config.RedisClient.Set(c, refreshSessionKey, user.ID, 30*24*time.Hour).Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "存储刷新令牌失败"})
+		return
+	}
+
+	// 保存会话信息
+	if err := services.SaveSessionInfo(c, refreshToken, uint(user.ID)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存会话信息失败"})
 		return
 	}
 
