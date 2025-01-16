@@ -94,13 +94,17 @@ func GetAllAdmins() ([]models.AdminDetailItem, error) {
 		Joins(`
 			LEFT JOIN (
 				SELECT 
-					user_id, 
-					MAX(login_time) as login_time,
-					ip_address
-				FROM user_logins
-				WHERE login_status = 'success'
-				GROUP BY user_id
-			) AS last_login ON admins.user_id = last_login.user_id
+					ul1.user_id, 
+					ul1.login_time,
+					ul1.ip_address
+				FROM user_logins ul1
+				INNER JOIN (
+					SELECT user_id, MAX(login_time) as max_login_time
+					FROM user_logins
+					WHERE login_status = 'success'
+					GROUP BY user_id
+				) ul2 ON ul1.user_id = ul2.user_id AND ul1.login_time = ul2.max_login_time
+			) last_login ON admins.user_id = last_login.user_id
 		`).
 		Find(&admins).Error
 
