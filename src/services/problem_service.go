@@ -621,11 +621,38 @@ func CreateTag(req *models.CreateTagRequest) (uint64, error) {
 		return 0, fmt.Errorf("无效的颜色格式，应为十六进制颜色值，如 #FF0000")
 	}
 
+	// 如果指定了分类ID，验证是否为二级分类
+	if req.CategoryID != nil {
+		var category models.TagCategory
+		if err := config.DB.First(&category, *req.CategoryID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return 0, fmt.Errorf("指定的分类不存在")
+			}
+			return 0, fmt.Errorf("查询分类信息失败: %v", err)
+		}
+
+		// 检查是否为二级分类
+		if category.ParentID == nil {
+			return 0, fmt.Errorf("标签只能添加到二级分类下")
+		}
+
+		// 检查父分类是否为一级分类
+		var parentCategory models.TagCategory
+		if err := config.DB.First(&parentCategory, *category.ParentID).Error; err != nil {
+			return 0, fmt.Errorf("查询父分类信息失败: %v", err)
+		}
+		if parentCategory.ParentID != nil {
+			return 0, fmt.Errorf("标签只能添加到二级分类下")
+		}
+	}
+
 	// 创建标签
 	tag := &models.ProblemTag{
-		Name:      req.Name,
-		Color:     req.Color,
-		CreatedAt: time.Now(),
+		Name:       req.Name,
+		Color:      req.Color,
+		CategoryID: req.CategoryID,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 
 	if err := config.DB.Create(tag).Error; err != nil {
@@ -637,44 +664,75 @@ func CreateTag(req *models.CreateTagRequest) (uint64, error) {
 
 // UpdateTag 更新标签
 func UpdateTag(tagID uint64, req *models.UpdateTagRequest) error {
-	// 检查标签是否存在
-	var tag models.ProblemTag
-	if err := config.DB.First(&tag, tagID).Error; err != nil {
-		return fmt.Errorf("标签不存在: %v", err)
-	}
-
-	updates := make(map[string]interface{})
-
-	// 更新标签名
-	if req.Name != nil {
-		// 检查新名称是否与其他标签重复
-		var count int64
-		if err := config.DB.Model(&models.ProblemTag{}).
-			Where("name = ? AND id != ?", *req.Name, tagID).
-			Count(&count).Error; err != nil {
-			return fmt.Errorf("检查标签名是否存在失败: %v", err)
+	return config.DB.Transaction(func(tx *gorm.DB) error {
+		// 检查标签是否存在
+		var tag models.ProblemTag
+		if err := tx.First(&tag, tagID).Error; err != nil {
+			return fmt.Errorf("标签不存在: %v", err)
 		}
-		if count > 0 {
-			return fmt.Errorf("标签名 %s 已存在", *req.Name)
-		}
-		updates["name"] = *req.Name
-	}
 
-	// 更新标签颜色
-	if req.Color != nil {
-		if !isValidHexColor(*req.Color) {
-			return fmt.Errorf("无效的颜色格式，应为十六进制颜色值，如 #FF0000")
-		}
-		updates["color"] = *req.Color
-	}
+		updates := make(map[string]interface{})
 
-	if len(updates) > 0 {
-		if err := config.DB.Model(&tag).Updates(updates).Error; err != nil {
-			return fmt.Errorf("更新标签失败: %v", err)
+		// 更新标签名
+		if req.Name != nil {
+			// 检查新名称是否与其他标签重复
+			var count int64
+			if err := tx.Model(&models.ProblemTag{}).
+				Where("name = ? AND id != ?", *req.Name, tagID).
+				Count(&count).Error; err != nil {
+				return fmt.Errorf("检查标签名是否存在失败: %v", err)
+			}
+			if count > 0 {
+				return fmt.Errorf("标签名 %s 已存在", *req.Name)
+			}
+			updates["name"] = *req.Name
 		}
-	}
 
-	return nil
+		// 更新标签颜色
+		if req.Color != nil {
+			if !isValidHexColor(*req.Color) {
+				return fmt.Errorf("无效的颜色格式，应为十六进制颜色值，如 #FF0000")
+			}
+			updates["color"] = *req.Color
+		}
+
+		// 更新分类
+		if req.CategoryID != nil {
+			// 验证是否为二级分类
+			var category models.TagCategory
+			if err := tx.First(&category, *req.CategoryID).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return fmt.Errorf("指定的分类不存在")
+				}
+				return fmt.Errorf("查询分类信息失败: %v", err)
+			}
+
+			// 检查是否为二级分类
+			if category.ParentID == nil {
+				return fmt.Errorf("标签只能添加到二级分类下")
+			}
+
+			// 检查父分类是否为一级分类
+			var parentCategory models.TagCategory
+			if err := tx.First(&parentCategory, *category.ParentID).Error; err != nil {
+				return fmt.Errorf("查询父分类信息失败: %v", err)
+			}
+			if parentCategory.ParentID != nil {
+				return fmt.Errorf("标签只能添加到二级分类下")
+			}
+
+			updates["category_id"] = *req.CategoryID
+		}
+
+		if len(updates) > 0 {
+			updates["updated_at"] = time.Now()
+			if err := tx.Model(&tag).Updates(updates).Error; err != nil {
+				return fmt.Errorf("更新标签失败: %v", err)
+			}
+		}
+
+		return nil
+	})
 }
 
 // DeleteTag 删除标签
