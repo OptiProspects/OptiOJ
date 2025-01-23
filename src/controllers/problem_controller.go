@@ -632,3 +632,150 @@ func GetDifficultySystem(c *gin.Context) {
 		"data": response,
 	})
 }
+
+// CreateTagCategory 创建标签分类
+func CreateTagCategory(c *gin.Context) {
+	// 验证管理员权限
+	accessToken := c.GetHeader("Authorization")
+	currentUserID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	isAdmin, _ := services.IsAdmin(uint(currentUserID))
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+		return
+	}
+
+	var req models.CreateTagCategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	categoryID, err := services.CreateTagCategory(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"data":    gin.H{"category_id": categoryID},
+		"message": "创建标签分类成功",
+	})
+}
+
+// UpdateTagCategory 更新标签分类
+func UpdateTagCategory(c *gin.Context) {
+	// 验证管理员权限
+	accessToken := c.GetHeader("Authorization")
+	currentUserID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	isAdmin, _ := services.IsAdmin(uint(currentUserID))
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+		return
+	}
+
+	categoryID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分类ID"})
+		return
+	}
+
+	var req models.UpdateTagCategoryRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	if err := services.UpdateTagCategory(categoryID, &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "更新标签分类成功",
+	})
+}
+
+// DeleteTagCategory 删除标签分类
+func DeleteTagCategory(c *gin.Context) {
+	// 验证管理员权限
+	accessToken := c.GetHeader("Authorization")
+	currentUserID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	isAdmin, _ := services.IsAdmin(uint(currentUserID))
+	if !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "权限不足"})
+		return
+	}
+
+	categoryID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的分类ID"})
+		return
+	}
+
+	if err := services.DeleteTagCategory(categoryID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "删除标签分类成功",
+	})
+}
+
+// GetTagCategoryList 获取标签分类列表
+func GetTagCategoryList(c *gin.Context) {
+	var req models.GetTagCategoryListRequest
+
+	// 解析父分类ID参数
+	if parentIDStr := c.Query("parent_id"); parentIDStr != "" {
+		parentID, err := strconv.ParseUint(parentIDStr, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "无效的父分类ID"})
+			return
+		}
+		req.ParentID = &parentID
+	}
+
+	response, err := services.GetTagCategoryList(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}
+
+// GetTagCategoryTree 获取标签分类树形结构
+func GetTagCategoryTree(c *gin.Context) {
+	response, err := services.GetTagCategoryTree()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}

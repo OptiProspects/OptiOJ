@@ -74,10 +74,20 @@ func SetupRoutes(r *gin.Engine) {
 	// 标签管理相关路由
 	tags := r.Group("/tags")
 	{
-		tags.POST("", controllers.CreateTag)       // 创建标签
-		tags.PUT("/:id", controllers.UpdateTag)    // 更新标签
-		tags.DELETE("/:id", controllers.DeleteTag) // 删除标签
-		tags.GET("", controllers.GetTagList)       // 获取标签列表
+		tags.POST("", controllers.CreateTag)            // 创建标签
+		tags.PUT("/:id", controllers.UpdateTag)         // 更新标签
+		tags.DELETE("/:id", controllers.DeleteTag)      // 删除标签
+		tags.GET("/getTagList", controllers.GetTagList) // 获取标签列表
+
+		// 标签分类相关路由
+		categories := tags.Group("/categories")
+		{
+			categories.POST("/createTagCategory", controllers.CreateTagCategory)       // 创建标签分类
+			categories.PUT("/:id/updateTagCategory", controllers.UpdateTagCategory)    // 更新标签分类
+			categories.DELETE("/:id/deleteTagCategory", controllers.DeleteTagCategory) // 删除标签分类
+			categories.GET("/getTagCategoryList", controllers.GetTagCategoryList)      // 获取标签分类列表
+			categories.GET("/getTagCategoryTree", controllers.GetTagCategoryTree)      // 获取标签分类树形结构
+		}
 	}
 
 	// 测试用例管理相关路由

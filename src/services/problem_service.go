@@ -715,6 +715,9 @@ func GetTagList(req *models.TagListRequest) (*models.TagListResponse, error) {
 	if req.Name != "" {
 		query = query.Where("name LIKE ?", "%"+req.Name+"%")
 	}
+	if req.CategoryID != nil {
+		query = query.Where("category_id = ?", *req.CategoryID)
+	}
 
 	// 获取总数
 	var total int64
@@ -723,7 +726,7 @@ func GetTagList(req *models.TagListRequest) (*models.TagListResponse, error) {
 	}
 
 	// 获取分页数据
-	var tags []models.ProblemTag
+	var tags []models.TagWithCategory
 	if err := query.Order("created_at DESC").
 		Offset((req.Page - 1) * req.PageSize).
 		Limit(req.PageSize).
@@ -731,12 +734,59 @@ func GetTagList(req *models.TagListRequest) (*models.TagListResponse, error) {
 		return nil, fmt.Errorf("获取标签列表失败: %v", err)
 	}
 
+	// 获取标签的分类信息
+	for i := range tags {
+		if tags[i].CategoryID != nil {
+			var category models.TagCategory
+			if err := config.DB.First(&category, *tags[i].CategoryID).Error; err != nil {
+				if err != gorm.ErrRecordNotFound {
+					return nil, fmt.Errorf("获取标签分类信息失败: %v", err)
+				}
+			} else {
+				tags[i].Category = &category
+				// 获取分类路径
+				path, err := getCategoryPath(config.DB, category)
+				if err != nil {
+					return nil, fmt.Errorf("获取分类路径失败: %v", err)
+				}
+				tags[i].CategoryPath = path
+			}
+		}
+	}
+
+	// 获取一级分类列表
+	var categories []models.TagCategory
+	if err := config.DB.Where("parent_id IS NULL").Order("created_at DESC").Find(&categories).Error; err != nil {
+		return nil, fmt.Errorf("获取分类列表失败: %v", err)
+	}
+
 	return &models.TagListResponse{
-		Tags:     tags,
-		Total:    total,
-		Page:     req.Page,
-		PageSize: req.PageSize,
+		Tags:       tags,
+		Total:      total,
+		Page:       req.Page,
+		PageSize:   req.PageSize,
+		Categories: categories,
 	}, nil
+}
+
+// getCategoryPath 获取分类的完整路径
+func getCategoryPath(db *gorm.DB, category models.TagCategory) ([]string, error) {
+	path := []string{category.Name}
+	currentID := category.ParentID
+
+	for currentID != nil {
+		var parent models.TagCategory
+		if err := db.First(&parent, *currentID).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				break
+			}
+			return nil, err
+		}
+		path = append([]string{parent.Name}, path...)
+		currentID = parent.ParentID
+	}
+
+	return path, nil
 }
 
 // isValidHexColor 验证十六进制颜色值格式
@@ -819,4 +869,244 @@ func GetDifficultySystem() (*models.GetDifficultySystemResponse, error) {
 	}
 
 	return response, nil
+}
+
+// CreateTagCategory 创建标签分类
+func CreateTagCategory(req *models.CreateTagCategoryRequest) (uint64, error) {
+	// 如果指定了父分类，检查父分类是否存在
+	if req.ParentID != nil {
+		var count int64
+		if err := config.DB.Model(&models.TagCategory{}).Where("id = ?", *req.ParentID).Count(&count).Error; err != nil {
+			return 0, fmt.Errorf("检查父分类是否存在失败: %v", err)
+		}
+		if count == 0 {
+			return 0, fmt.Errorf("父分类不存在")
+		}
+	}
+
+	// 检查同级分类下是否有重名
+	var count int64
+	query := config.DB.Model(&models.TagCategory{}).Where("name = ?", req.Name)
+	if req.ParentID != nil {
+		query = query.Where("parent_id = ?", *req.ParentID)
+	} else {
+		query = query.Where("parent_id IS NULL")
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("检查分类名是否存在失败: %v", err)
+	}
+	if count > 0 {
+		return 0, fmt.Errorf("同级分类下已存在名为 %s 的分类", req.Name)
+	}
+
+	// 创建分类
+	category := &models.TagCategory{
+		Name:        req.Name,
+		Description: req.Description,
+		ParentID:    req.ParentID,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+
+	if err := config.DB.Create(category).Error; err != nil {
+		return 0, fmt.Errorf("创建分类失败: %v", err)
+	}
+
+	return category.ID, nil
+}
+
+// UpdateTagCategory 更新标签分类
+func UpdateTagCategory(categoryID uint64, req *models.UpdateTagCategoryRequest) error {
+	return config.DB.Transaction(func(tx *gorm.DB) error {
+		// 检查分类是否存在
+		var category models.TagCategory
+		if err := tx.First(&category, categoryID).Error; err != nil {
+			return fmt.Errorf("分类不存在: %v", err)
+		}
+
+		updates := make(map[string]interface{})
+
+		// 更新分类名
+		if req.Name != nil {
+			// 检查新名称是否与同级其他分类重复
+			var count int64
+			query := tx.Model(&models.TagCategory{}).
+				Where("name = ? AND id != ?", *req.Name, categoryID)
+			if req.ParentID != nil {
+				query = query.Where("parent_id = ?", *req.ParentID)
+			} else {
+				query = query.Where("parent_id IS NULL")
+			}
+			if err := query.Count(&count).Error; err != nil {
+				return fmt.Errorf("检查分类名是否存在失败: %v", err)
+			}
+			if count > 0 {
+				return fmt.Errorf("同级分类下已存在名为 %s 的分类", *req.Name)
+			}
+			updates["name"] = *req.Name
+		}
+
+		// 更新描述
+		if req.Description != nil {
+			updates["description"] = *req.Description
+		}
+
+		// 更新父分类
+		if req.ParentID != nil {
+			// 检查新父分类是否存在
+			var count int64
+			if err := tx.Model(&models.TagCategory{}).Where("id = ?", *req.ParentID).Count(&count).Error; err != nil {
+				return fmt.Errorf("检查父分类是否存在失败: %v", err)
+			}
+			if count == 0 {
+				return fmt.Errorf("父分类不存在")
+			}
+
+			// 检查是否会形成循环依赖
+			if *req.ParentID == categoryID {
+				return fmt.Errorf("不能将分类设置为自己的子分类")
+			}
+
+			// 检查新父分类是否是当前分类的子分类
+			var childIDs []uint64
+			if err := getChildCategoryIDs(tx, categoryID, &childIDs); err != nil {
+				return fmt.Errorf("检查子分类失败: %v", err)
+			}
+			for _, childID := range childIDs {
+				if childID == *req.ParentID {
+					return fmt.Errorf("不能将分类设置为其子分类的子分类")
+				}
+			}
+
+			updates["parent_id"] = req.ParentID
+		}
+
+		if len(updates) > 0 {
+			updates["updated_at"] = time.Now()
+			if err := tx.Model(&category).Updates(updates).Error; err != nil {
+				return fmt.Errorf("更新分类失败: %v", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// DeleteTagCategory 删除标签分类
+func DeleteTagCategory(categoryID uint64) error {
+	return config.DB.Transaction(func(tx *gorm.DB) error {
+		// 检查分类是否存在
+		var category models.TagCategory
+		if err := tx.First(&category, categoryID).Error; err != nil {
+			return fmt.Errorf("分类不存在: %v", err)
+		}
+
+		// 检查是否有子分类
+		var childCount int64
+		if err := tx.Model(&models.TagCategory{}).Where("parent_id = ?", categoryID).Count(&childCount).Error; err != nil {
+			return fmt.Errorf("检查子分类失败: %v", err)
+		}
+		if childCount > 0 {
+			return fmt.Errorf("该分类下还有子分类，无法删除")
+		}
+
+		// 检查是否有标签使用该分类
+		var tagCount int64
+		if err := tx.Model(&models.ProblemTag{}).Where("category_id = ?", categoryID).Count(&tagCount).Error; err != nil {
+			return fmt.Errorf("检查标签使用情况失败: %v", err)
+		}
+		if tagCount > 0 {
+			return fmt.Errorf("该分类下还有标签，无法删除")
+		}
+
+		// 删除分类
+		if err := tx.Delete(&category).Error; err != nil {
+			return fmt.Errorf("删除分类失败: %v", err)
+		}
+
+		return nil
+	})
+}
+
+// GetTagCategoryList 获取标签分类列表
+func GetTagCategoryList(req *models.GetTagCategoryListRequest) (*models.GetTagCategoryListResponse, error) {
+	var categories []models.TagCategory
+
+	// 构建查询
+	query := config.DB.Model(&models.TagCategory{})
+	if req.ParentID != nil {
+		query = query.Where("parent_id = ?", *req.ParentID)
+	} else {
+		query = query.Where("parent_id IS NULL")
+	}
+
+	// 执行查询
+	if err := query.Order("created_at DESC").Find(&categories).Error; err != nil {
+		return nil, fmt.Errorf("获取分类列表失败: %v", err)
+	}
+
+	// 转换为响应格式
+	var categoryDetails []models.TagCategoryDetail
+	for _, category := range categories {
+		detail := models.TagCategoryDetail{
+			TagCategory: category,
+		}
+
+		// 获取子分类
+		if err := getChildCategories(config.DB, category.ID, &detail.Children); err != nil {
+			return nil, fmt.Errorf("获取子分类失败: %v", err)
+		}
+
+		categoryDetails = append(categoryDetails, detail)
+	}
+
+	return &models.GetTagCategoryListResponse{
+		Categories: categoryDetails,
+	}, nil
+}
+
+// getChildCategories 递归获取子分类
+func getChildCategories(db *gorm.DB, parentID uint64, children *[]models.TagCategoryDetail) error {
+	var categories []models.TagCategory
+	if err := db.Where("parent_id = ?", parentID).Order("created_at DESC").Find(&categories).Error; err != nil {
+		return err
+	}
+
+	for _, category := range categories {
+		detail := models.TagCategoryDetail{
+			TagCategory: category,
+		}
+		if err := getChildCategories(db, category.ID, &detail.Children); err != nil {
+			return err
+		}
+		*children = append(*children, detail)
+	}
+
+	return nil
+}
+
+// getChildCategoryIDs 递归获取所有子分类ID
+func getChildCategoryIDs(db *gorm.DB, parentID uint64, childIDs *[]uint64) error {
+	var categories []models.TagCategory
+	if err := db.Where("parent_id = ?", parentID).Find(&categories).Error; err != nil {
+		return err
+	}
+
+	for _, category := range categories {
+		*childIDs = append(*childIDs, category.ID)
+		if err := getChildCategoryIDs(db, category.ID, childIDs); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GetTagCategoryTree 获取标签分类树形结构
+func GetTagCategoryTree() (*models.GetTagCategoryListResponse, error) {
+	// 获取所有一级分类
+	req := &models.GetTagCategoryListRequest{
+		ParentID: nil,
+	}
+	return GetTagCategoryList(req)
 }

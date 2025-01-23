@@ -117,6 +117,7 @@ func CheckAndInitializeDatabase() {
 			"teams.sql",        // 依赖 users, problems
 			"judge.sql",        // 依赖 users, problems
 			"messages.sql",     // 依赖 users
+			"tags.sql",         // 依赖 problems
 		}
 
 		// 创建文件名到路径的映射

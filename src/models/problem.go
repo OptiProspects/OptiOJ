@@ -129,12 +129,37 @@ type ProblemCategory struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// TagCategory 标签分类
+type TagCategory struct {
+	ID          uint64    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ParentID    *uint64   `json:"parent_id"` // 父分类ID，为空表示一级分类
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// TagCategoryDetail 标签分类详情（包含子分类）
+type TagCategoryDetail struct {
+	TagCategory
+	Children []TagCategoryDetail `json:"children,omitempty"` // 子分类列表
+}
+
 // ProblemTag 题目标签
 type ProblemTag struct {
-	ID        uint64    `json:"id"`
-	Name      string    `json:"name"`
-	Color     string    `json:"color"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uint64    `json:"id"`
+	Name       string    `json:"name"`
+	Color      string    `json:"color"`
+	CategoryID *uint64   `json:"category_id"` // 所属分类ID
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// TagWithCategory 带有分类信息的标签
+type TagWithCategory struct {
+	ProblemTag
+	Category     *TagCategory `json:"category,omitempty"`      // 所属分类
+	CategoryPath []string     `json:"category_path,omitempty"` // 分类路径
 }
 
 // TestCase 测试用例
@@ -244,29 +269,57 @@ type TestCaseUploadRequest struct {
 
 // CreateTagRequest 创建标签请求
 type CreateTagRequest struct {
-	Name  string `json:"name" binding:"required,max=30"`
-	Color string `json:"color" binding:"required,len=7"` // 十六进制颜色值，如 #FF0000
+	Name       string  `json:"name" binding:"required,max=30"`
+	Color      string  `json:"color" binding:"required,len=7"` // 十六进制颜色值，如 #FF0000
+	CategoryID *uint64 `json:"category_id"`                    // 所属分类ID
 }
 
 // UpdateTagRequest 更新标签请求
 type UpdateTagRequest struct {
-	Name  *string `json:"name" binding:"omitempty,max=30"`
-	Color *string `json:"color" binding:"omitempty,len=7"` // 十六进制颜色值，如 #FF0000
+	Name       *string `json:"name" binding:"omitempty,max=30"`
+	Color      *string `json:"color" binding:"omitempty,len=7"` // 十六进制颜色值，如 #FF0000
+	CategoryID *uint64 `json:"category_id"`                     // 所属分类ID
 }
 
 // TagListRequest 标签列表请求
 type TagListRequest struct {
-	Page     int    `form:"page" binding:"required,min=1"`
-	PageSize int    `form:"page_size" binding:"required,min=1,max=100"`
-	Name     string `form:"name"` // 标签名称模糊搜索
+	Page       int     `form:"page" binding:"required,min=1"`
+	PageSize   int     `form:"page_size" binding:"required,min=1,max=100"`
+	Name       string  `form:"name"`        // 标签名称模糊搜索
+	CategoryID *uint64 `form:"category_id"` // 分类ID过滤
 }
 
 // TagListResponse 标签列表响应
 type TagListResponse struct {
-	Tags     []ProblemTag `json:"tags"`
-	Total    int64        `json:"total"`
-	Page     int          `json:"page"`
-	PageSize int          `json:"page_size"`
+	Tags       []TagWithCategory `json:"tags"`
+	Total      int64             `json:"total"`
+	Page       int               `json:"page"`
+	PageSize   int               `json:"page_size"`
+	Categories []TagCategory     `json:"categories"` // 一级分类列表
+}
+
+// CreateTagCategoryRequest 创建标签分类请求
+type CreateTagCategoryRequest struct {
+	Name        string  `json:"name" binding:"required,max=50"`
+	Description string  `json:"description" binding:"max=200"`
+	ParentID    *uint64 `json:"parent_id"` // 父分类ID，为空表示一级分类
+}
+
+// UpdateTagCategoryRequest 更新标签分类请求
+type UpdateTagCategoryRequest struct {
+	Name        *string `json:"name" binding:"omitempty,max=50"`
+	Description *string `json:"description" binding:"omitempty,max=200"`
+	ParentID    *uint64 `json:"parent_id"` // 父分类ID，为空表示一级分类
+}
+
+// GetTagCategoryListRequest 获取标签分类列表请求
+type GetTagCategoryListRequest struct {
+	ParentID *uint64 `form:"parent_id"` // 父分类ID，为空表示获取一级分类
+}
+
+// GetTagCategoryListResponse 获取标签分类列表响应
+type GetTagCategoryListResponse struct {
+	Categories []TagCategoryDetail `json:"categories"`
 }
 
 // SwitchDifficultySystemRequest 切换难度等级系统请求
