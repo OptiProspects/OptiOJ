@@ -147,7 +147,7 @@ func GetTeamDetail(teamID uint64, userID uint64) (*models.TeamDetail, error) {
 	}
 
 	// 获取创建者基本信息
-	owner, err := GetTeamOwnerInfo(team.CreatedBy)
+	owner, err := GetTeamOwnerInfo(teamID, team.CreatedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +157,7 @@ func GetTeamDetail(teamID uint64, userID uint64) (*models.TeamDetail, error) {
 }
 
 // GetTeamOwnerInfo 获取团队创建者信息
-func GetTeamOwnerInfo(ownerID uint64) (*models.TeamOwnerInfo, error) {
+func GetTeamOwnerInfo(teamID uint64, ownerID uint64) (*models.TeamOwnerInfo, error) {
 	// 查询用户基本信息
 	var user struct {
 		ID       uint64 `json:"id"`
@@ -171,16 +171,13 @@ func GetTeamOwnerInfo(ownerID uint64) (*models.TeamOwnerInfo, error) {
 		return nil, err
 	}
 
-	// 查询用户个人资料
-	var profile struct {
-		RealName string    `json:"real_name"`
-		CreateAt time.Time `json:"create_at"`
-		UpdateAt time.Time `json:"update_at"`
-	}
-	if err := config.DB.Table("profiles").
-		Select("real_name, create_at, update_at").
-		Where("user_id = ?", ownerID).
-		First(&profile).Error; err != nil && err != gorm.ErrRecordNotFound {
+	// 查询团队内名称
+	var nickname string
+	err := config.DB.Table("team_nicknames").
+		Select("nickname").
+		Where("team_id = ? AND user_id = ?", teamID, ownerID).
+		Take(&nickname).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, err
 	}
 
@@ -188,7 +185,7 @@ func GetTeamOwnerInfo(ownerID uint64) (*models.TeamOwnerInfo, error) {
 		ID:       user.ID,
 		Username: user.Username,
 		Email:    user.Email,
-		RealName: profile.RealName,
+		Nickname: nickname,
 	}, nil
 }
 
@@ -242,7 +239,7 @@ func GetTeamList(req *models.TeamListRequest, userID uint64) (*models.TeamListRe
 		}
 
 		// 获取创建者信息
-		owner, err := GetTeamOwnerInfo(team.CreatedBy)
+		owner, err := GetTeamOwnerInfo(team.ID, team.CreatedBy)
 		if err != nil {
 			return nil, err
 		}
@@ -868,6 +865,45 @@ func RemoveTeamAvatar(teamID uint64) error {
 	return nil
 }
 
+// UpdateTeamNickname 更新团队内名称
+func UpdateTeamNickname(teamID uint64, userID uint64, nickname string) error {
+	// 检查用户是否是团队成员
+	role, err := GetTeamUserRole(teamID, userID)
+	if err != nil {
+		return err
+	}
+	if role == "" {
+		return errors.New("您不是团队成员")
+	}
+
+	if nickname == "" {
+		// 如果昵称为空，则删除记录
+		return config.DB.Where("team_id = ? AND user_id = ?", teamID, userID).Delete(&models.TeamNickname{}).Error
+	}
+
+	// 更新或创建团队内名称
+	return config.DB.Exec(`
+		INSERT INTO team_nicknames (team_id, user_id, nickname)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE
+		nickname = VALUES(nickname),
+		updated_at = CURRENT_TIMESTAMP
+	`, teamID, userID, nickname).Error
+}
+
+// GetTeamNickname 获取团队内名称
+func GetTeamNickname(teamID uint64, userID uint64) (string, error) {
+	var nickname string
+	err := config.DB.Table("team_nicknames").
+		Select("nickname").
+		Where("team_id = ? AND user_id = ?", teamID, userID).
+		Take(&nickname).Error
+	if err == gorm.ErrRecordNotFound {
+		return "", nil
+	}
+	return nickname, err
+}
+
 // GetTeamMemberList 获取团队成员列表
 func GetTeamMemberList(teamID uint64, req *models.TeamMemberListRequest, userID uint64) (*models.TeamMemberListResponse, error) {
 	// 检查用户权限
@@ -881,10 +917,17 @@ func GetTeamMemberList(teamID uint64, req *models.TeamMemberListRequest, userID 
 
 	// 构建基础查询
 	query := config.DB.Table("team_members").
-		Select("team_members.user_id, users.username, avatars.filename as avatar, profiles.real_name, team_members.role, team_members.joined_at").
+		Select(`
+			team_members.user_id,
+			users.username,
+			avatars.filename as avatar,
+			team_members.role,
+			team_members.joined_at,
+			team_nicknames.nickname
+		`).
 		Joins("LEFT JOIN users ON team_members.user_id = users.id").
-		Joins("LEFT JOIN profiles ON team_members.user_id = profiles.user_id").
 		Joins("LEFT JOIN avatars ON team_members.user_id = avatars.user_id").
+		Joins("LEFT JOIN team_nicknames ON team_members.team_id = team_nicknames.team_id AND team_members.user_id = team_nicknames.user_id").
 		Where("team_members.team_id = ?", teamID)
 
 	// 添加角色筛选
@@ -894,7 +937,8 @@ func GetTeamMemberList(teamID uint64, req *models.TeamMemberListRequest, userID 
 
 	// 添加关键字搜索
 	if req.Keyword != "" {
-		query = query.Where("(users.username LIKE ? OR profiles.real_name LIKE ?)", "%"+req.Keyword+"%", "%"+req.Keyword+"%")
+		query = query.Where("(users.username LIKE ? OR team_nicknames.nickname LIKE ?)",
+			"%"+req.Keyword+"%", "%"+req.Keyword+"%")
 	}
 
 	// 获取总数

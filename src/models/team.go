@@ -157,7 +157,7 @@ type TeamOwnerInfo struct {
 	ID       uint64 `json:"id"`
 	Username string `json:"username"`
 	Email    string `json:"email"`
-	RealName string `json:"real_name,omitempty"`
+	Nickname string `json:"nickname,omitempty"` // 团队内名称
 }
 
 // TeamDetail 团队详情
@@ -196,10 +196,10 @@ type TeamMemberListRequest struct {
 type TeamMemberInfo struct {
 	UserID   uint64    `json:"user_id"`
 	Username string    `json:"username"`
-	RealName string    `json:"real_name"`
 	Avatar   string    `json:"avatar"`
 	Role     string    `json:"role"`
 	JoinedAt time.Time `json:"joined_at"`
+	Nickname string    `json:"nickname,omitempty"` // 团队内名称
 }
 
 // TeamMemberListResponse 团队成员列表响应
@@ -208,4 +208,18 @@ type TeamMemberListResponse struct {
 	Total    int64            `json:"total"`
 	Page     int              `json:"page"`
 	PageSize int              `json:"page_size"`
+}
+
+// TeamNickname 团队内名称
+type TeamNickname struct {
+	TeamID    uint64    `json:"team_id"`
+	UserID    uint64    `json:"user_id"`
+	Nickname  string    `json:"nickname"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// UpdateTeamNicknameRequest 更新团队内名称请求
+type UpdateTeamNicknameRequest struct {
+	Nickname string `json:"nickname" binding:"omitempty,max=50"`
 }

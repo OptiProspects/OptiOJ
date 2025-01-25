@@ -681,3 +681,39 @@ func GetTeamMemberList(c *gin.Context) {
 		"data": response,
 	})
 }
+
+// UpdateTeamNickname 更新团队内名称
+func UpdateTeamNickname(c *gin.Context) {
+	// 验证用户身份
+	accessToken := c.GetHeader("Authorization")
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	// 获取团队ID
+	teamID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的团队ID"})
+		return
+	}
+
+	// 绑定请求参数
+	var req models.UpdateTeamNicknameRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	// 更新团队内名称
+	if err := services.UpdateTeamNickname(teamID, uint64(userID), req.Nickname); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    200,
+		"message": "更新团队内名称成功",
+	})
+}

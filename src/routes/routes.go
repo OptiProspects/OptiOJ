@@ -121,6 +121,7 @@ func SetupRoutes(r *gin.Engine) {
 		teams.PUT("/:id/members/role", controllers.UpdateTeamMemberRole)      // 更新成员角色
 		teams.DELETE("/:id/members/:user_id", controllers.RemoveTeamMember)   // 移除成员
 		teams.GET("/:id/getMembers", controllers.GetTeamMemberList)           // 获取成员列表
+		teams.PUT("/:id/changeNickname", controllers.UpdateTeamNickname)      // 更新团队内名称
 
 		// 团队头像相关路由
 		teams.POST("/:id/avatar", controllers.UploadTeamAvatar)   // 上传团队头像

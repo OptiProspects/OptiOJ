@@ -88,6 +88,18 @@ CREATE TABLE team_avatars (
     FOREIGN KEY (team_id) REFERENCES teams(id)
 );
 
+-- 团队内名称表
+CREATE TABLE team_nicknames (
+    team_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NOT NULL,
+    nickname VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (team_id, user_id),
+    FOREIGN KEY (team_id) REFERENCES teams(id),
+    FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
 -- 创建索引
 CREATE INDEX idx_team_members_user_id ON team_members(user_id);
 CREATE INDEX idx_team_assignments_team_id ON team_assignments(team_id);
