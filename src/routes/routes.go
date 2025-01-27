@@ -136,10 +136,21 @@ func SetupRoutes(r *gin.Engine) {
 		// 团队作业相关路由
 		assignments := teams.Group("/assignments")
 		{
-			assignments.POST("", controllers.CreateAssignment)       // 创建作业
-			assignments.PUT("/:id", controllers.UpdateAssignment)    // 更新作业
-			assignments.GET("/:id", controllers.GetAssignmentDetail) // 获取作业详情
-			assignments.GET("", controllers.GetAssignmentList)       // 获取作业列表
+			assignments.POST("/createAssignment", controllers.CreateAssignment)           // 创建作业
+			assignments.PUT("/:id/updateAssignment", controllers.UpdateAssignment)        // 更新作业
+			assignments.GET("/:id/getAssignmentDetail", controllers.GetAssignmentDetail)  // 获取作业详情
+			assignments.GET("/getAssignmentList", controllers.GetAssignmentList)          // 获取作业列表
+			assignments.GET("/getAvailableProblems", controllers.GetAvailableProblemList) // 获取可用题目列表
+		}
+
+		// 团队私有题目相关路由
+		teamProblems := teams.Group("/problems")
+		{
+			teamProblems.POST("", controllers.CreateTeamProblem)       // 创建团队私有题目
+			teamProblems.PUT("/:id", controllers.UpdateTeamProblem)    // 更新团队私有题目
+			teamProblems.DELETE("/:id", controllers.DeleteTeamProblem) // 删除团队私有题目
+			teamProblems.GET("/:id", controllers.GetTeamProblemDetail) // 获取团队私有题目详情
+			teamProblems.GET("", controllers.GetTeamProblemList)       // 获取团队私有题目列表
 		}
 
 		// 团队题单相关路由

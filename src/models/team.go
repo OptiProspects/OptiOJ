@@ -36,10 +36,12 @@ type TeamAssignment struct {
 
 // TeamAssignmentProblem 团队作业题目
 type TeamAssignmentProblem struct {
-	AssignmentID uint64 `json:"assignment_id"`
-	ProblemID    uint64 `json:"problem_id"`
-	OrderIndex   int    `json:"order_index"`
-	Score        int    `json:"score"`
+	AssignmentID  uint64  `json:"assignment_id"`
+	ProblemID     uint64  `json:"problem_id"`
+	ProblemType   string  `json:"problem_type"`    // 题目类型：global-全局题目，team-团队题目
+	TeamProblemID *uint64 `json:"team_problem_id"` // 团队题目ID，当problem_type为team时有效
+	OrderIndex    int     `json:"order_index"`
+	Score         int     `json:"score"`
 }
 
 // TeamProblemList 团队题单
@@ -92,9 +94,11 @@ type CreateAssignmentRequest struct {
 	StartTime   time.Time `json:"start_time" binding:"required"`
 	EndTime     time.Time `json:"end_time" binding:"required"`
 	Problems    []struct {
-		ProblemID  uint64 `json:"problem_id" binding:"required"`
-		OrderIndex int    `json:"order_index"`
-		Score      int    `json:"score"`
+		ProblemID     uint64 `json:"problem_id" binding:"required"`
+		ProblemType   string `json:"problem_type" binding:"required,oneof=global team"` // 题目类型：global-全局题目，team-团队题目
+		TeamProblemID uint64 `json:"team_problem_id,omitempty"`                         // 团队题目ID，当problem_type为team时必填
+		OrderIndex    int    `json:"order_index"`
+		Score         int    `json:"score"`
 	} `json:"problems" binding:"required"`
 }
 
@@ -105,9 +109,11 @@ type UpdateAssignmentRequest struct {
 	StartTime   time.Time `json:"start_time"`
 	EndTime     time.Time `json:"end_time"`
 	Problems    []struct {
-		ProblemID  uint64 `json:"problem_id"`
-		OrderIndex int    `json:"order_index"`
-		Score      int    `json:"score"`
+		ProblemID     uint64 `json:"problem_id"`
+		ProblemType   string `json:"problem_type" binding:"omitempty,oneof=global team"` // 题目类型：global-全局题目，team-团队题目
+		TeamProblemID uint64 `json:"team_problem_id,omitempty"`                          // 团队题目ID，当problem_type为team时必填
+		OrderIndex    int    `json:"order_index"`
+		Score         int    `json:"score"`
 	} `json:"problems"`
 }
 
@@ -222,4 +228,42 @@ type TeamNickname struct {
 // UpdateTeamNicknameRequest 更新团队内名称请求
 type UpdateTeamNicknameRequest struct {
 	Nickname string `json:"nickname" binding:"omitempty,max=50"`
+}
+
+// AvailableProblemListRequest 获取可用题目列表请求
+type AvailableProblemListRequest struct {
+	TeamID   uint64 `form:"team_id" binding:"required"`
+	Page     int    `form:"page" binding:"required,min=1"`
+	PageSize int    `form:"page_size" binding:"required,min=1,max=100"`
+	Keyword  string `form:"keyword"`                                        // 搜索关键字
+	Type     string `form:"type" binding:"omitempty,oneof=all global team"` // 题目类型：all-所有题目，global-全局题目，team-团队题目
+}
+
+// AvailableProblemInfo 可用题目信息
+type AvailableProblemInfo struct {
+	ID            uint64    `json:"id"`              // 题目ID
+	Type          string    `json:"type"`            // 题目类型：global-全局题目，team-团队题目
+	TeamProblemID uint64    `json:"team_problem_id"` // 团队题目ID，当type为team时有效
+	Title         string    `json:"title"`           // 题目标题
+	TimeLimit     int       `json:"time_limit"`      // 时间限制
+	MemoryLimit   int       `json:"memory_limit"`    // 内存限制
+	Tags          string    `json:"tags"`            // 标签列表，JSON字符串
+	Difficulty    string    `json:"difficulty"`      // 难度等级：beginner-入门，easy-简单，medium-中等，hard-困难，expert-专家
+	CreatedBy     uint64    `json:"created_by"`      // 创建者ID
+	CreatedAt     time.Time `json:"created_at"`      // 创建时间
+}
+
+// AvailableProblemTag 可用题目标签
+type AvailableProblemTag struct {
+	ID    uint64 `json:"id"`    // 标签ID
+	Name  string `json:"name"`  // 标签名称
+	Color string `json:"color"` // 标签颜色
+}
+
+// AvailableProblemListResponse 获取可用题目列表响应
+type AvailableProblemListResponse struct {
+	Problems []AvailableProblemInfo `json:"problems"`
+	Total    int64                  `json:"total"`
+	Page     int                    `json:"page"`
+	PageSize int                    `json:"page_size"`
 }

@@ -9,6 +9,7 @@ import (
 	"mime/multipart"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -355,6 +356,29 @@ func CreateAssignment(req *models.CreateAssignmentRequest, userID uint64) (uint6
 		return 0, errors.New("开始时间不能晚于结束时间")
 	}
 
+	// 验证题目
+	for _, problem := range req.Problems {
+		if problem.ProblemType == "team" {
+			// 验证团队私有题目
+			var teamProblem models.TeamProblem
+			if err := config.DB.Where("id = ? AND team_id = ?", problem.TeamProblemID, req.TeamID).First(&teamProblem).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return 0, errors.New("团队私有题目不存在")
+				}
+				return 0, err
+			}
+		} else {
+			// 验证全局题目
+			var globalProblem models.Problem
+			if err := config.DB.First(&globalProblem, problem.ProblemID).Error; err != nil {
+				if err == gorm.ErrRecordNotFound {
+					return 0, errors.New("全局题目不存在")
+				}
+				return 0, err
+			}
+		}
+	}
+
 	assignment := &models.TeamAssignment{
 		TeamID:      req.TeamID,
 		Title:       req.Title,
@@ -374,11 +398,18 @@ func CreateAssignment(req *models.CreateAssignmentRequest, userID uint64) (uint6
 
 		// 添加题目
 		for _, problem := range req.Problems {
+			var teamProblemID *uint64
+			if problem.ProblemType == "team" {
+				id := problem.TeamProblemID
+				teamProblemID = &id
+			}
 			ap := &models.TeamAssignmentProblem{
-				AssignmentID: assignment.ID,
-				ProblemID:    problem.ProblemID,
-				OrderIndex:   problem.OrderIndex,
-				Score:        problem.Score,
+				AssignmentID:  assignment.ID,
+				ProblemID:     problem.ProblemID,
+				ProblemType:   problem.ProblemType,
+				TeamProblemID: teamProblemID,
+				OrderIndex:    problem.OrderIndex,
+				Score:         problem.Score,
 			}
 			if err := tx.Create(ap).Error; err != nil {
 				return err
@@ -403,6 +434,31 @@ func UpdateAssignment(assignmentID uint64, req *models.UpdateAssignmentRequest, 
 	}
 	if role != "owner" && role != "admin" {
 		return errors.New("权限不足")
+	}
+
+	// 验证题目
+	if req.Problems != nil {
+		for _, problem := range req.Problems {
+			if problem.ProblemType == "team" {
+				// 验证团队私有题目
+				var teamProblem models.TeamProblem
+				if err := config.DB.Where("id = ? AND team_id = ?", problem.TeamProblemID, assignment.TeamID).First(&teamProblem).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						return errors.New("团队私有题目不存在")
+					}
+					return err
+				}
+			} else {
+				// 验证全局题目
+				var globalProblem models.Problem
+				if err := config.DB.First(&globalProblem, problem.ProblemID).Error; err != nil {
+					if err == gorm.ErrRecordNotFound {
+						return errors.New("全局题目不存在")
+					}
+					return err
+				}
+			}
+		}
 	}
 
 	return config.DB.Transaction(func(tx *gorm.DB) error {
@@ -435,11 +491,18 @@ func UpdateAssignment(assignmentID uint64, req *models.UpdateAssignmentRequest, 
 
 			// 添加新的题目
 			for _, problem := range req.Problems {
+				var teamProblemID *uint64
+				if problem.ProblemType == "team" {
+					id := problem.TeamProblemID
+					teamProblemID = &id
+				}
 				ap := &models.TeamAssignmentProblem{
-					AssignmentID: assignmentID,
-					ProblemID:    problem.ProblemID,
-					OrderIndex:   problem.OrderIndex,
-					Score:        problem.Score,
+					AssignmentID:  assignmentID,
+					ProblemID:     problem.ProblemID,
+					ProblemType:   problem.ProblemType,
+					TeamProblemID: teamProblemID,
+					OrderIndex:    problem.OrderIndex,
+					Score:         problem.Score,
 				}
 				if err := tx.Create(ap).Error; err != nil {
 					return err
@@ -958,6 +1021,157 @@ func GetTeamMemberList(teamID uint64, req *models.TeamMemberListRequest, userID 
 
 	return &models.TeamMemberListResponse{
 		Members:  members,
+		Total:    total,
+		Page:     req.Page,
+		PageSize: req.PageSize,
+	}, nil
+}
+
+// GetAvailableProblemList 获取可用题目列表
+func GetAvailableProblemList(req *models.AvailableProblemListRequest, userID uint64) (*models.AvailableProblemListResponse, error) {
+	// 检查用户权限
+	role, err := GetTeamUserRole(req.TeamID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if role == "" {
+		return nil, errors.New("您不是团队成员")
+	}
+
+	var problems []models.AvailableProblemInfo
+	var total int64
+
+	// 根据请求的类型构建查询
+	if req.Type == "team" || req.Type == "all" {
+		// 查询团队私有题目
+		teamQuery := config.DB.Model(&models.TeamProblem{}).
+			Select(`
+				team_problems.id,
+				'team' as type,
+				team_problems.id as team_problem_id,
+				team_problems.title,
+				team_problems.time_limit,
+				team_problems.memory_limit,
+				'' as tags,
+				'team' as difficulty,
+				team_problems.created_by,
+				team_problems.created_at
+			`).
+			Where("team_problems.team_id = ?", req.TeamID)
+
+		if req.Keyword != "" {
+			// 尝试将关键字解析为ID
+			if id, err := strconv.ParseUint(req.Keyword, 10, 64); err == nil {
+				teamQuery = teamQuery.Where("team_problems.id = ?", id)
+			} else {
+				// 如果不是ID，则搜索标题和其他字段
+				teamQuery = teamQuery.Where("team_problems.title LIKE ? OR team_problems.input_description LIKE ? OR "+
+					"team_problems.output_description LIKE ? OR team_problems.hint LIKE ?",
+					"%"+req.Keyword+"%", "%"+req.Keyword+"%",
+					"%"+req.Keyword+"%", "%"+req.Keyword+"%")
+			}
+		}
+
+		// 获取团队题目总数
+		var teamTotal int64
+		if err := teamQuery.Count(&teamTotal).Error; err != nil {
+			return nil, err
+		}
+		total += teamTotal
+
+		// 如果只查询团队题目或在第一页，获取团队题目
+		if req.Type == "team" || (req.Type == "all" && req.Page == 1) {
+			var teamProblems []models.AvailableProblemInfo
+			if err := teamQuery.
+				Offset((req.Page - 1) * req.PageSize).
+				Limit(req.PageSize).
+				Order("team_problems.created_at DESC").
+				Scan(&teamProblems).Error; err != nil {
+				return nil, err
+			}
+			problems = append(problems, teamProblems...)
+		}
+	}
+
+	if req.Type == "global" || req.Type == "all" {
+		// 查询全局题目
+		globalQuery := config.DB.Table("problems").
+			Select(`
+				problems.id,
+				'global' as type,
+				0 as team_problem_id,
+				problems.title,
+				problems.time_limit,
+				problems.memory_limit,
+				CAST(COALESCE(JSON_ARRAYAGG(
+					JSON_OBJECT(
+						'id', problem_tags.id,
+						'name', problem_tags.name,
+						'color', problem_tags.color
+					)
+				), '[]') AS CHAR) as tags,
+				COALESCE(problems.difficulty, 'medium') as difficulty,
+				problems.created_by,
+				problems.created_at
+			`).
+			Joins("LEFT JOIN problem_tag_relations ON problems.id = problem_tag_relations.problem_id").
+			Joins("LEFT JOIN problem_tags ON problem_tag_relations.tag_id = problem_tags.id").
+			Group("problems.id")
+
+		if req.Keyword != "" {
+			// 尝试将关键字解析为ID
+			if id, err := strconv.ParseUint(req.Keyword, 10, 64); err == nil {
+				globalQuery = globalQuery.Where("problems.id = ?", id)
+			} else {
+				// 如果不是ID，则搜索标题、标签和其他字段
+				globalQuery = globalQuery.Where(`
+					problems.title LIKE ? OR 
+					problems.input_description LIKE ? OR 
+					problems.output_description LIKE ? OR 
+					problems.hint LIKE ? OR
+					EXISTS (
+						SELECT 1 FROM problem_tag_relations ptr
+						JOIN problem_tags pt ON ptr.tag_id = pt.id
+						WHERE ptr.problem_id = problems.id AND pt.name LIKE ?
+					)`,
+					"%"+req.Keyword+"%", "%"+req.Keyword+"%",
+					"%"+req.Keyword+"%", "%"+req.Keyword+"%",
+					"%"+req.Keyword+"%")
+			}
+		}
+
+		// 获取全局题目总数
+		var globalTotal int64
+		if err := globalQuery.Count(&total).Error; err != nil {
+			return nil, err
+		}
+		total += globalTotal
+
+		// 如果只查询全局题目，或者在查询所有题目且需要补充数据
+		if req.Type == "global" || (req.Type == "all" && len(problems) < req.PageSize) {
+			offset := 0
+			limit := req.PageSize
+			if req.Type == "all" {
+				offset = 0
+				limit = req.PageSize - len(problems)
+			} else {
+				offset = (req.Page - 1) * req.PageSize
+			}
+
+			var globalProblems []models.AvailableProblemInfo
+			if err := globalQuery.
+				Offset(offset).
+				Limit(limit).
+				Order("problems.created_at DESC").
+				Scan(&globalProblems).Error; err != nil {
+				return nil, err
+			}
+			problems = append(problems, globalProblems...)
+		}
+	}
+
+	return &models.AvailableProblemListResponse{
+		Problems: problems,
 		Total:    total,
 		Page:     req.Page,
 		PageSize: req.PageSize,

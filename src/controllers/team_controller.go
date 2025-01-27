@@ -717,3 +717,31 @@ func UpdateTeamNickname(c *gin.Context) {
 		"message": "更新团队内名称成功",
 	})
 }
+
+// GetAvailableProblemList 获取可用题目列表
+func GetAvailableProblemList(c *gin.Context) {
+	// 验证用户身份
+	accessToken := c.GetHeader("Authorization")
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	var req models.AvailableProblemListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	response, err := services.GetAvailableProblemList(&req, uint64(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}
