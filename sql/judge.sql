@@ -8,10 +8,12 @@ CREATE TABLE submissions (
     time_used INT,                  -- 运行时间（毫秒）
     memory_used INT,                -- 内存使用（KB）
     error_message TEXT,             -- 错误信息
+    assignment_id BIGINT UNSIGNED,  -- 作业ID，为空表示非作业提交
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (problem_id) REFERENCES problems(id),
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (assignment_id) REFERENCES team_assignments(id)
 );
 
 CREATE TABLE judge_results (

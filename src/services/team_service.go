@@ -1177,3 +1177,413 @@ func GetAvailableProblemList(req *models.AvailableProblemListRequest, userID uin
 		PageSize: req.PageSize,
 	}, nil
 }
+
+// GetAssignmentProblems 获取作业题目列表
+func GetAssignmentProblems(req *models.GetAssignmentProblemsRequest, userID uint64) (*models.GetAssignmentProblemsResponse, error) {
+	// 检查用户权限
+	role, err := GetTeamUserRole(req.TeamID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if role == "" {
+		return nil, errors.New("您不是团队成员")
+	}
+
+	// 查询作业题目
+	var problems []models.AssignmentProblemDetail
+	err = config.DB.Table("team_assignment_problems").
+		Select(`
+			CASE 
+				WHEN team_assignment_problems.problem_type = 'global' THEN problems.id 
+				ELSE team_problems.id 
+			END as id,
+			team_assignment_problems.problem_type as type,
+			team_assignment_problems.team_problem_id,
+			CASE 
+				WHEN team_assignment_problems.problem_type = 'global' THEN problems.title 
+				ELSE team_problems.title 
+			END as title,
+			CASE 
+				WHEN team_assignment_problems.problem_type = 'global' THEN problems.time_limit 
+				ELSE team_problems.time_limit 
+			END as time_limit,
+			CASE 
+				WHEN team_assignment_problems.problem_type = 'global' THEN problems.memory_limit 
+				ELSE team_problems.memory_limit 
+			END as memory_limit,
+			CASE 
+				WHEN team_assignment_problems.problem_type = 'global' THEN 
+					CAST(COALESCE(JSON_ARRAYAGG(
+						JSON_OBJECT(
+							'id', problem_tags.id,
+							'name', problem_tags.name,
+							'color', problem_tags.color
+						)
+					), '[]') AS CHAR)
+				ELSE '[]'
+			END as tags,
+			CASE 
+				WHEN team_assignment_problems.problem_type = 'global' THEN COALESCE(problems.difficulty, 'medium')
+				ELSE 'team'
+			END as difficulty,
+			team_assignment_problems.score,
+			team_assignment_problems.order_index
+		`).
+		Joins("LEFT JOIN problems ON team_assignment_problems.problem_type = 'global' AND team_assignment_problems.problem_id = problems.id").
+		Joins("LEFT JOIN team_problems ON team_assignment_problems.problem_type = 'team' AND team_assignment_problems.team_problem_id = team_problems.id").
+		Joins("LEFT JOIN problem_tag_relations ON team_assignment_problems.problem_type = 'global' AND problems.id = problem_tag_relations.problem_id").
+		Joins("LEFT JOIN problem_tags ON problem_tag_relations.tag_id = problem_tags.id").
+		Where("team_assignment_problems.assignment_id = ?", req.AssignmentID).
+		Group("team_assignment_problems.problem_id, team_assignment_problems.problem_type").
+		Order("team_assignment_problems.order_index").
+		Scan(&problems).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取每个题目的提交统计
+	for i := range problems {
+		var stats models.SubmissionStats
+		stats.StatusCounts = make(map[string]int)
+
+		// 查询总提交数和各状态数量
+		rows, err := config.DB.Raw(`
+			SELECT s.status, COUNT(*) as count
+			FROM submissions s
+			WHERE s.problem_id = ? 
+				AND s.assignment_id = ?
+			GROUP BY s.status
+		`, problems[i].ID, req.AssignmentID).Rows()
+
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var status string
+			var count int
+			if err := rows.Scan(&status, &count); err != nil {
+				return nil, err
+			}
+			stats.StatusCounts[status] = count
+			stats.TotalCount += count
+			if status == "Accepted" {
+				stats.AcceptedCount = count
+			}
+		}
+
+		// 计算通过率
+		if stats.TotalCount > 0 {
+			stats.AcceptedRate = float64(stats.AcceptedCount) / float64(stats.TotalCount)
+		}
+
+		problems[i].SubmissionStats = stats
+	}
+
+	return &models.GetAssignmentProblemsResponse{
+		Problems: problems,
+	}, nil
+}
+
+// GetAssignmentProblemDetail 获取作业题目详情
+func GetAssignmentProblemDetail(req *models.GetAssignmentProblemDetailRequest, userID uint64) (*models.AssignmentProblemFullDetail, error) {
+	// 检查用户权限
+	role, err := GetTeamUserRole(req.TeamID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if role == "" {
+		return nil, errors.New("您不是团队成员")
+	}
+
+	// 验证题目是否属于该作业
+	var assignmentProblem models.TeamAssignmentProblem
+	err = config.DB.Where("assignment_id = ? AND problem_id = ? AND problem_type = ?",
+		req.AssignmentID, req.ProblemID, req.ProblemType).First(&assignmentProblem).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.New("题目不存在于该作业中")
+		}
+		return nil, err
+	}
+
+	var detail models.AssignmentProblemFullDetail
+	detail.Score = assignmentProblem.Score
+	detail.Type = req.ProblemType
+
+	if req.ProblemType == "team" {
+		// 获取团队题目详情
+		var teamProblem models.TeamProblem
+		if err := config.DB.First(&teamProblem, req.ProblemID).Error; err != nil {
+			return nil, err
+		}
+		detail.ID = teamProblem.ID
+		detail.TeamProblemID = &teamProblem.ID
+		detail.Title = teamProblem.Title
+		detail.Description = teamProblem.Description
+		detail.InputDescription = teamProblem.InputDescription
+		detail.OutputDescription = teamProblem.OutputDescription
+		detail.TimeLimit = teamProblem.TimeLimit
+		detail.MemoryLimit = teamProblem.MemoryLimit
+		detail.SampleCases = teamProblem.SampleCases
+		detail.Hint = teamProblem.Hint
+		detail.Tags = []models.ProblemTag{} // 团队题目暂无标签
+		detail.Difficulty = "team"
+		detail.DifficultySystem = models.DifficultySystemNormal // 团队题目使用普通难度系统
+		detail.Source = ""                                      // 团队题目暂无来源
+		detail.Categories = []models.ProblemCategory{}          // 团队题目暂无分类
+	} else {
+		// 获取全局题目详情
+		var problem models.Problem
+		if err := config.DB.First(&problem, req.ProblemID).Error; err != nil {
+			return nil, err
+		}
+		detail.ID = problem.ID
+		detail.Title = problem.Title
+		detail.Description = problem.Description
+		detail.InputDescription = problem.InputDescription
+		detail.OutputDescription = problem.OutputDescription
+		detail.TimeLimit = problem.TimeLimit
+		detail.MemoryLimit = problem.MemoryLimit
+		detail.SampleCases = problem.SampleCases
+		detail.Hint = problem.Hint
+		detail.Difficulty = problem.Difficulty
+		detail.DifficultySystem = problem.DifficultySystem
+		detail.Source = problem.Source
+
+		// 获取标签
+		var tags []models.ProblemTag
+		if err := config.DB.Table("problem_tags").
+			Select("problem_tags.id, problem_tags.name, problem_tags.color").
+			Joins("JOIN problem_tag_relations ON problem_tags.id = problem_tag_relations.tag_id").
+			Where("problem_tag_relations.problem_id = ?", problem.ID).
+			Find(&tags).Error; err != nil {
+			return nil, err
+		}
+		detail.Tags = tags
+
+		// 获取分类
+		var categories []models.ProblemCategory
+		if err := config.DB.Table("problem_categories").
+			Select("problem_categories.*").
+			Joins("JOIN problem_category_relations ON problem_categories.id = problem_category_relations.category_id").
+			Where("problem_category_relations.problem_id = ?", problem.ID).
+			Find(&categories).Error; err != nil {
+			return nil, err
+		}
+		detail.Categories = categories
+	}
+
+	// 获取用户提交状态
+	var status string
+	err = config.DB.Raw(`
+		SELECT status
+		FROM submissions
+		WHERE problem_id = ? 
+			AND user_id = ?
+			AND assignment_id = ?
+		ORDER BY id DESC
+		LIMIT 1
+	`, req.ProblemID, userID, req.AssignmentID).Scan(&status).Error
+
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+
+	if status != "" {
+		if status == "Accepted" {
+			accepted := "accepted"
+			detail.UserStatus = &accepted
+		} else {
+			attempted := "attempted"
+			detail.UserStatus = &attempted
+		}
+	}
+
+	// 获取提交统计
+	var stats models.SubmissionStats
+	stats.StatusCounts = make(map[string]int)
+
+	rows, err := config.DB.Raw(`
+		SELECT s.status, COUNT(*) as count
+		FROM submissions s
+		WHERE s.problem_id = ? 
+			AND s.assignment_id = ?
+		GROUP BY s.status
+	`, req.ProblemID, req.AssignmentID).Rows()
+
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, err
+		}
+		stats.StatusCounts[status] = count
+		stats.TotalCount += count
+		if status == "Accepted" {
+			stats.AcceptedCount = count
+		}
+	}
+
+	if stats.TotalCount > 0 {
+		stats.AcceptedRate = float64(stats.AcceptedCount) / float64(stats.TotalCount)
+	}
+
+	detail.SubmissionStats = stats
+
+	return &detail, nil
+}
+
+// SubmitAssignmentCode 提交作业代码
+func SubmitAssignmentCode(req *models.SubmitAssignmentCodeRequest, userID uint64) (uint64, error) {
+	// 检查用户权限
+	role, err := GetTeamUserRole(req.TeamID, userID)
+	if err != nil {
+		return 0, err
+	}
+	if role == "" {
+		return 0, errors.New("您不是团队成员")
+	}
+
+	// 验证题目是否属于该作业
+	var assignmentProblem models.TeamAssignmentProblem
+	err = config.DB.Where("assignment_id = ? AND problem_id = ? AND problem_type = ?",
+		req.AssignmentID, req.ProblemID, req.ProblemType).First(&assignmentProblem).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return 0, errors.New("题目不存在于该作业中")
+		}
+		return 0, err
+	}
+
+	// 验证作业是否在进行中
+	var assignment models.TeamAssignment
+	if err := config.DB.First(&assignment, req.AssignmentID).Error; err != nil {
+		return 0, err
+	}
+
+	now := time.Now()
+	if now.Before(assignment.StartTime) {
+		return 0, errors.New("作业尚未开始")
+	}
+	if now.After(assignment.EndTime) {
+		return 0, errors.New("作业已结束")
+	}
+
+	// 创建提交记录
+	submission := &models.Submission{
+		ProblemID:    req.ProblemID,
+		UserID:       userID,
+		Language:     req.Language,
+		Code:         req.Code,
+		Status:       "Pending",
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+		AssignmentID: &req.AssignmentID,
+	}
+
+	if err := config.DB.Create(submission).Error; err != nil {
+		return 0, err
+	}
+
+	// TODO: 发送到判题队列
+
+	return submission.ID, nil
+}
+
+// GetAssignmentSubmissions 获取作业提交记录
+func GetAssignmentSubmissions(req *models.GetAssignmentSubmissionsRequest, userID uint64) (*models.GetAssignmentSubmissionsResponse, error) {
+	// 检查用户权限
+	role, err := GetTeamUserRole(req.TeamID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if role == "" {
+		return nil, errors.New("您不是团队成员")
+	}
+
+	// 构建查询
+	query := config.DB.Table("submissions s").
+		Select(`
+			s.id,
+			s.problem_id,
+			tap.problem_type,
+			CASE 
+				WHEN tap.problem_type = 'global' THEN p.title 
+				ELSE tp.title 
+			END as problem_title,
+			s.user_id,
+			u.username,
+			COALESCE(tn.nickname, u.username) as nickname,
+			s.language,
+			s.status,
+			s.time_used,
+			s.memory_used,
+			tap.score,
+			s.created_at
+		`).
+		Joins("JOIN team_assignment_problems tap ON tap.assignment_id = s.assignment_id AND tap.problem_id = s.problem_id").
+		Joins("JOIN users u ON u.id = s.user_id").
+		Joins("LEFT JOIN team_nicknames tn ON tn.team_id = ? AND tn.user_id = s.user_id", req.TeamID).
+		Joins("LEFT JOIN problems p ON tap.problem_type = 'global' AND p.id = s.problem_id").
+		Joins("LEFT JOIN team_problems tp ON tap.problem_type = 'team' AND tp.id = tap.team_problem_id").
+		Where("s.assignment_id = ?", req.AssignmentID)
+
+	// 添加筛选条件
+	if req.UserID != 0 {
+		query = query.Where("s.user_id = ?", req.UserID)
+	}
+	if req.ProblemID != 0 {
+		query = query.Where("s.problem_id = ?", req.ProblemID)
+	}
+	if req.Status != "" {
+		query = query.Where("s.status = ?", req.Status)
+	}
+
+	// 获取总数
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		return nil, err
+	}
+
+	// 获取分页数据
+	var submissions []models.AssignmentSubmissionInfo
+	offset := (req.Page - 1) * req.PageSize
+
+	// 构建排序
+	orderStr := "s.id DESC" // 默认按提交ID降序
+	if req.OrderBy != "" {
+		if req.OrderBy == "id" {
+			orderStr = "s.id"
+		} else if req.OrderBy == "created_at" {
+			orderStr = "s.created_at"
+		}
+
+		if req.OrderType == "asc" {
+			orderStr += " ASC"
+		} else {
+			orderStr += " DESC"
+		}
+	}
+
+	if err := query.Order(orderStr).
+		Offset(offset).
+		Limit(req.PageSize).
+		Scan(&submissions).Error; err != nil {
+		return nil, err
+	}
+
+	return &models.GetAssignmentSubmissionsResponse{
+		Submissions: submissions,
+		Total:       total,
+		Page:        req.Page,
+		PageSize:    req.PageSize,
+	}, nil
+}

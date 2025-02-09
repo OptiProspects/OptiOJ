@@ -141,6 +141,10 @@ func SetupRoutes(r *gin.Engine) {
 			assignments.GET("/:id/getAssignmentDetail", controllers.GetAssignmentDetail)  // 获取作业详情
 			assignments.GET("/getAssignmentList", controllers.GetAssignmentList)          // 获取作业列表
 			assignments.GET("/getAvailableProblems", controllers.GetAvailableProblemList) // 获取可用题目列表
+			assignments.GET("/getAssignmentProblems", controllers.GetAssignmentProblems)  // 获取作业题目列表
+			assignments.GET("/getProblemDetail", controllers.GetAssignmentProblemDetail)  // 获取作业题目详情
+			assignments.POST("/submitCode", controllers.SubmitAssignmentCode)             // 提交作业代码
+			assignments.GET("/getSubmissions", controllers.GetAssignmentSubmissions)      // 获取作业提交记录
 		}
 
 		// 团队私有题目相关路由

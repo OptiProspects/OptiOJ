@@ -35,6 +35,7 @@ type Submission struct {
 	TimeUsed     *int      `json:"time_used"`
 	MemoryUsed   *int      `json:"memory_used"`
 	ErrorMessage *string   `json:"error_message"`
+	AssignmentID *uint64   `json:"assignment_id"` // 作业ID，为空表示非作业提交
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

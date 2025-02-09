@@ -745,3 +745,117 @@ func GetAvailableProblemList(c *gin.Context) {
 		"data": response,
 	})
 }
+
+// GetAssignmentProblems 获取作业题目列表
+func GetAssignmentProblems(c *gin.Context) {
+	// 验证用户身份
+	accessToken := c.GetHeader("Authorization")
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	var req models.GetAssignmentProblemsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	response, err := services.GetAssignmentProblems(&req, uint64(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}
+
+// GetAssignmentProblemDetail 获取作业题目详情
+func GetAssignmentProblemDetail(c *gin.Context) {
+	// 验证用户身份
+	accessToken := c.GetHeader("Authorization")
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	var req models.GetAssignmentProblemDetailRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	detail, err := services.GetAssignmentProblemDetail(&req, uint64(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": detail,
+	})
+}
+
+// SubmitAssignmentCode 提交作业代码
+func SubmitAssignmentCode(c *gin.Context) {
+	// 验证用户身份
+	accessToken := c.GetHeader("Authorization")
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	var req models.SubmitAssignmentCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	submissionID, err := services.SubmitAssignmentCode(&req, uint64(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": gin.H{
+			"submission_id": submissionID,
+		},
+	})
+}
+
+// GetAssignmentSubmissions 获取作业提交记录
+func GetAssignmentSubmissions(c *gin.Context) {
+	// 验证用户身份
+	accessToken := c.GetHeader("Authorization")
+	userID, err := services.ValidateAccessToken(accessToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "无效的访问令牌"})
+		return
+	}
+
+	var req models.GetAssignmentSubmissionsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+
+	response, err := services.GetAssignmentSubmissions(&req, uint64(userID))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code": 200,
+		"data": response,
+	})
+}

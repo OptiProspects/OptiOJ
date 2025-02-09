@@ -107,7 +107,7 @@ type Problem struct {
 	Description       string           `json:"description"`
 	InputDescription  string           `json:"input_description"`
 	OutputDescription string           `json:"output_description"`
-	Samples           string           `json:"samples"` // JSON格式存储样例输入输出
+	SampleCases       string           `json:"sample_cases" gorm:"column:samples"`
 	Hint              string           `json:"hint"`
 	Source            string           `json:"source"`
 	DifficultySystem  DifficultySystem `json:"difficulty_system"` // 难度等级系统

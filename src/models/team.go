@@ -267,3 +267,119 @@ type AvailableProblemListResponse struct {
 	Page     int                    `json:"page"`
 	PageSize int                    `json:"page_size"`
 }
+
+// AssignmentProblemDetail 作业题目详情
+type AssignmentProblemDetail struct {
+	ID              uint64          `json:"id"`               // 题目ID
+	Type            string          `json:"type"`             // 题目类型：global-全局题目，team-团队题目
+	TeamProblemID   *uint64         `json:"team_problem_id"`  // 团队题目ID，当type为team时有效
+	Title           string          `json:"title"`            // 题目标题
+	TimeLimit       int             `json:"time_limit"`       // 时间限制
+	MemoryLimit     int             `json:"memory_limit"`     // 内存限制
+	Tags            string          `json:"tags"`             // 标签列表，JSON字符串
+	Difficulty      string          `json:"difficulty"`       // 难度等级
+	Score           int             `json:"score"`            // 分值
+	OrderIndex      int             `json:"order_index"`      // 题目顺序
+	SubmissionStats SubmissionStats `json:"submission_stats"` // 提交统计
+}
+
+// SubmissionStats 提交统计
+type SubmissionStats struct {
+	TotalCount    int            `json:"total_count"`    // 总提交数
+	AcceptedCount int            `json:"accepted_count"` // 通过数
+	AcceptedRate  float64        `json:"accepted_rate"`  // 通过率
+	StatusCounts  map[string]int `json:"status_counts"`  // 各状态数量
+}
+
+// GetAssignmentProblemsRequest 获取作业题目列表请求
+type GetAssignmentProblemsRequest struct {
+	AssignmentID uint64 `form:"assignment_id" binding:"required"`
+	TeamID       uint64 `form:"team_id" binding:"required"`
+}
+
+// GetAssignmentProblemsResponse 获取作业题目列表响应
+type GetAssignmentProblemsResponse struct {
+	Problems []AssignmentProblemDetail `json:"problems"`
+}
+
+// GetAssignmentProblemDetailRequest 获取作业题目详情请求
+type GetAssignmentProblemDetailRequest struct {
+	AssignmentID uint64 `form:"assignment_id" binding:"required"`
+	ProblemID    uint64 `form:"problem_id" binding:"required"`
+	ProblemType  string `form:"problem_type" binding:"required,oneof=global team"`
+	TeamID       uint64 `form:"team_id" binding:"required"`
+}
+
+// AssignmentProblemFullDetail 作业题目完整详情
+type AssignmentProblemFullDetail struct {
+	ID                uint64            `json:"id"`                 // 题目ID
+	Type              string            `json:"type"`               // 题目类型：global-全局题目，team-团队题目
+	TeamProblemID     *uint64           `json:"team_problem_id"`    // 团队题目ID，当type为team时有效
+	Title             string            `json:"title"`              // 题目标题
+	Description       string            `json:"description"`        // 题目描述
+	InputDescription  string            `json:"input_description"`  // 输入说明
+	OutputDescription string            `json:"output_description"` // 输出说明
+	TimeLimit         int               `json:"time_limit"`         // 时间限制
+	MemoryLimit       int               `json:"memory_limit"`       // 内存限制
+	Tags              []ProblemTag      `json:"tags"`               // 标签列表
+	Difficulty        string            `json:"difficulty"`         // 难度等级
+	Score             int               `json:"score"`              // 分值
+	SampleCases       string            `json:"sample_cases"`       // 样例
+	Hint              string            `json:"hint"`               // 提示
+	Source            string            `json:"source"`             // 来源
+	DifficultySystem  DifficultySystem  `json:"difficulty_system"`  // 难度等级系统
+	CreatedBy         uint64            `json:"created_by"`         // 创建者ID
+	CreatedAt         time.Time         `json:"created_at"`         // 创建时间
+	UpdatedAt         time.Time         `json:"updated_at"`         // 更新时间
+	Categories        []ProblemCategory `json:"categories"`         // 分类
+	UserStatus        *string           `json:"user_status"`        // 用户状态：null-未提交, accepted-已通过, attempted-尝试过
+	SubmissionStats   SubmissionStats   `json:"submission_stats"`   // 提交统计
+}
+
+// SubmitAssignmentCodeRequest 提交作业代码请求
+type SubmitAssignmentCodeRequest struct {
+	AssignmentID uint64 `json:"assignment_id" binding:"required"`
+	ProblemID    uint64 `json:"problem_id" binding:"required"`
+	ProblemType  string `json:"problem_type" binding:"required,oneof=global team"`
+	TeamID       uint64 `json:"team_id" binding:"required"`
+	Language     string `json:"language" binding:"required"`
+	Code         string `json:"code" binding:"required"`
+}
+
+// GetAssignmentSubmissionsRequest 获取作业提交记录请求
+type GetAssignmentSubmissionsRequest struct {
+	AssignmentID uint64 `form:"assignment_id" binding:"required"`
+	TeamID       uint64 `form:"team_id" binding:"required"`
+	UserID       uint64 `form:"user_id"`                                          // 可选，按用户筛选
+	ProblemID    uint64 `form:"problem_id"`                                       // 可选，按题目筛选
+	Status       string `form:"status"`                                           // 可选，按状态筛选
+	OrderBy      string `form:"order_by" binding:"omitempty,oneof=id created_at"` // 排序字段：id-按提交ID，created_at-按提交时间
+	OrderType    string `form:"order_type" binding:"omitempty,oneof=asc desc"`    // 排序方式：asc-升序，desc-降序
+	Page         int    `form:"page" binding:"required,min=1"`
+	PageSize     int    `form:"page_size" binding:"required,min=1,max=100"`
+}
+
+// AssignmentSubmissionInfo 作业提交记录信息
+type AssignmentSubmissionInfo struct {
+	ID           uint64    `json:"id"`            // 提交ID
+	ProblemID    uint64    `json:"problem_id"`    // 题目ID
+	ProblemType  string    `json:"problem_type"`  // 题目类型：global-全局题目，team-团队题目
+	ProblemTitle string    `json:"problem_title"` // 题目标题
+	UserID       uint64    `json:"user_id"`       // 用户ID
+	Username     string    `json:"username"`      // 用户名
+	Nickname     string    `json:"nickname"`      // 团队内名称
+	Language     string    `json:"language"`      // 编程语言
+	Status       string    `json:"status"`        // 判题状态
+	TimeUsed     int       `json:"time_used"`     // 运行时间（毫秒）
+	MemoryUsed   int       `json:"memory_used"`   // 内存使用（KB）
+	Score        int       `json:"score"`         // 题目分值
+	CreatedAt    time.Time `json:"created_at"`    // 提交时间
+}
+
+// GetAssignmentSubmissionsResponse 获取作业提交记录响应
+type GetAssignmentSubmissionsResponse struct {
+	Submissions []AssignmentSubmissionInfo `json:"submissions"`
+	Total       int64                      `json:"total"`
+	Page        int                        `json:"page"`
+	PageSize    int                        `json:"page_size"`
+}
